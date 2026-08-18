@@ -30,6 +30,22 @@ node patch-apply.mjs     # 见工作目录 防止插件错误挂不起服务/（
 不装内核补丁时：本插件的运行期服务/UI 仍可用（查隔离、手动隔离、恢复），
 但挂载期自动隔离不生效（崩溃发生在任何插件加载之前，纯插件无法拦截）。
 
+## 跟随 DSH 官方更新（内核补丁自愈）
+
+DSH 官方升级 = npx 重新拉包到新的 `~/.npm/_npx/<hash>/` 目录，内核补丁
+会被覆盖丢失。本插件每次启动时自动运行 **内核补丁自愈**（`lib/heal.js`）：
+
+- **动态定位**实际运行的 DSH 安装（不硬编码 npx hash，可从当前进程 argv 推断）；
+- **检测**补丁状态：`ok`（已打）/ `needs-apply`（丢失，npx 重装同版本）/ `needs-adaptation`（官方改了代码结构）；
+- **自动重打**：仅当目标与"已知原始版"一致时安全重打（含 `profile-boot-*.js` 文件名 hash 变化的情况）；
+- **官方改动结构**时报告 `needs-adaptation` 并提示更新 backup/ 模板，**绝不破坏新版代码**。
+
+补丁健康状态可通过 `fail_soft_status` 工具、`/api/fail-soft/status`（`patch` 字段）、
+UI 面板（🧩 行）查看。命令行重打：`node patch-apply.mjs`（与插件共用同一套 heal 逻辑）。
+
+> 版本适配：当官方大幅重构挂载链路、自愈报告 `needs-adaptation` 时，需要更新
+> `backup/` 里的 orig/patched 模板（抓官方新版 → 重打 → 存模板），通常一个版本一次。
+
 ## 安装（装入 profile）
 
 ```bash
