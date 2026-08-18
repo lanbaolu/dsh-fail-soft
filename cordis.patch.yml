@@ -2,5 +2,5 @@
 # 启动期挂载兜底不依赖本 entry —— 由 DSH 内核（DSH_FAIL_SOFT=1）直接加载 lib/mount.js。
 - insert:
     - id: dsh-fail-soft
-      name: '@dsh-external/dsh-fail-soft'
+      name: 'dsh-fail-soft'
       config: {}

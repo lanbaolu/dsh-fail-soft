@@ -1,5 +1,5 @@
 /**
- * @dsh-external/dsh-fail-soft — client 面板（conversation.view slot）。
+ * dsh-fail-soft — client 面板（conversation.view slot）。
  *
  * 展示 fail-soft 状态与被隔离插件列表，支持一键恢复（调 host
  * /api/fail-soft/*）。构建：npm run build:client（tsdown → lib/client.js，
@@ -40,18 +40,29 @@ function renderPanel(): HTMLElement {
     try {
       const res = await fetch('/api/fail-soft/status')
       const status = await res.json()
-      statusLine.textContent = `状态：${status.enabled ? '✅ fail-soft 已启用' : '⚠️ 未启用（启动时设置 DSH_FAIL_SOFT=1）'} ｜ 已隔离 ${status.quarantinedCount} 个插件`
-      statusLine.style.color = status.enabled ? '#3a8a3a' : '#b08030'
+      const damaged = (status.quarantined ?? []).length
+      if (damaged > 0) {
+        // 有损坏插件：醒目红色横幅 + 状态行
+        statusLine.textContent = `⚠️ 有 ${damaged} 个插件已损坏，已被自动隔离（其余插件不受影响）`
+        statusLine.style.cssText = 'margin-bottom:10px;color:#ff6b6b;font-weight:700;background:#2a1518;border:1px solid #7a2a2a;border-radius:6px;padding:8px 10px;'
+        title.textContent = `🔧 dsh-fail-soft — ⚠️ ${damaged} 个插件已损坏`
+        title.style.color = '#ff6b6b'
+      } else {
+        statusLine.textContent = `状态：${status.enabled ? '✅ fail-soft 已启用' : '⚠️ 未启用（启动时设置 DSH_FAIL_SOFT=1）'} ｜ 无损坏插件`
+        statusLine.style.cssText = 'margin-bottom:10px;color:#888;'
+        title.textContent = '🔧 dsh-fail-soft — 插件错误隔离'
+        title.style.color = ''
+      }
       listBox.replaceChildren()
-      if (!status.quarantined || status.quarantined.length === 0) {
+      if (damaged === 0) {
         listBox.appendChild(el('div', '（没有被隔离的插件）', undefined))
         return
       }
       for (const item of status.quarantined) {
         const row = el('div', undefined, undefined)
-        row.style.cssText = 'display:flex;align-items:center;gap:8px;background:#1d1f24;border:1px solid #333;border-radius:6px;padding:6px 10px;'
-        const info = el('span', `⛔ ${item.id}`, undefined)
-        info.style.cssText = 'font-weight:600;flex:1;'
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;background:#2a1518;border:1px solid #7a2a2a;border-radius:6px;padding:6px 10px;'
+        const info = el('span', `⛔ ${item.id}（已损坏，已隔离）`, undefined)
+        info.style.cssText = 'font-weight:600;color:#ff6b6b;flex:1;'
         row.appendChild(info)
         if (item.reason) {
           const reason = el('span', (item.reason || '').slice(0, 90), undefined)
@@ -103,9 +114,9 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.slots.inject('conversation.view', () =>
     ctx.slots.register({
       name: 'conversation.view',
-      id: '@dsh-external/dsh-fail-soft-panel',
-      label: () => '@dsh-external/dsh-fail-soft',
+      id: 'dsh-fail-soft-panel',
+      label: () => 'dsh-fail-soft',
       component: () => ({ render: renderPanel }),
     }),
-  ), '@dsh-external/dsh-fail-soft: panel')
+  ), 'dsh-fail-soft: panel')
 }
