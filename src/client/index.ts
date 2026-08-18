@@ -32,6 +32,10 @@ function renderPanel(): HTMLElement {
   statusLine.style.cssText = 'margin-bottom:10px;color:#888;'
   root.appendChild(statusLine)
 
+  const patchLine = el('div', '', undefined)
+  patchLine.style.cssText = 'margin-bottom:10px;color:#888;font-size:12px;'
+  root.appendChild(patchLine)
+
   const listBox = el('div', undefined, undefined)
   listBox.style.cssText = 'display:flex;flex-direction:column;gap:6px;'
   root.appendChild(listBox)
@@ -40,6 +44,23 @@ function renderPanel(): HTMLElement {
     try {
       const res = await fetch('/api/fail-soft/status')
       const status = await res.json()
+      // 内核补丁健康状态（跟随 DSH 官方更新）
+      const p = status.patch ?? {}
+      if (p.status === 'ok') {
+        patchLine.textContent = `🧩 内核补丁：正常（DSH ${p.version ?? '?'}）`
+        patchLine.style.color = '#4a9a4a'
+      } else if (p.status === 'checking') {
+        patchLine.textContent = '🧩 内核补丁：检测中…'
+        patchLine.style.color = '#888'
+      } else if (p.status === 'repaired') {
+        patchLine.textContent = `🧩 内核补丁：已自动重打（${(p.applied ?? []).join(', ')}）——重启后生效`
+        patchLine.style.color = '#d0a030'
+      } else if (p.status === 'needs-adaptation' || p.status === 'failed' || p.status === 'no-install') {
+        patchLine.textContent = `🧩 内核补丁：⚠️ 需要适配（${p.error ?? p.status}）`
+        patchLine.style.color = '#ff6b6b'
+      } else {
+        patchLine.textContent = `🧩 内核补丁：${p.status}`
+      }
       const damaged = (status.quarantined ?? []).length
       if (damaged > 0) {
         // 有损坏插件：醒目红色横幅 + 状态行
