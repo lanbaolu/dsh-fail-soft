@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import type { UserConfig } from 'tsdown'
 
-const PLUGIN_ID = "dsh-fail-soft"
+const PLUGIN_ID = "@lanbaolu/dsh-fail-soft"
 
 const CLIENT_EXTERNALS = [
   'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client',

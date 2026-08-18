@@ -1,5 +1,5 @@
 /**
- * dsh-fail-soft — client 面板（conversation.view slot）。
+ * @lanbaolu/dsh-fail-soft — client 面板（conversation.view slot）。
  *
  * 展示 fail-soft 状态与被隔离插件列表，支持一键恢复（调 host
  * /api/fail-soft/*）。构建：npm run build:client（tsdown → lib/client.js，
@@ -24,7 +24,7 @@ function renderPanel(): HTMLElement {
   const root = el('div', undefined, 'dsh-fail-soft-panel')
   root.style.cssText = 'padding:14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.6;'
 
-  const title = el('div', '🔧 dsh-fail-soft — 插件错误隔离', undefined)
+  const title = el('div', '🔧 @lanbaolu/dsh-fail-soft — 插件错误隔离', undefined)
   title.style.cssText = 'font-weight:700;margin-bottom:8px;'
   root.appendChild(title)
 
@@ -45,12 +45,12 @@ function renderPanel(): HTMLElement {
         // 有损坏插件：醒目红色横幅 + 状态行
         statusLine.textContent = `⚠️ 有 ${damaged} 个插件已损坏，已被自动隔离（其余插件不受影响）`
         statusLine.style.cssText = 'margin-bottom:10px;color:#ff6b6b;font-weight:700;background:#2a1518;border:1px solid #7a2a2a;border-radius:6px;padding:8px 10px;'
-        title.textContent = `🔧 dsh-fail-soft — ⚠️ ${damaged} 个插件已损坏`
+        title.textContent = `🔧 @lanbaolu/dsh-fail-soft — ⚠️ ${damaged} 个插件已损坏`
         title.style.color = '#ff6b6b'
       } else {
         statusLine.textContent = `状态：${status.enabled ? '✅ fail-soft 已启用' : '⚠️ 未启用（启动时设置 DSH_FAIL_SOFT=1）'} ｜ 无损坏插件`
         statusLine.style.cssText = 'margin-bottom:10px;color:#888;'
-        title.textContent = '🔧 dsh-fail-soft — 插件错误隔离'
+        title.textContent = '🔧 @lanbaolu/dsh-fail-soft — 插件错误隔离'
         title.style.color = ''
       }
       listBox.replaceChildren()
@@ -115,8 +115,8 @@ export function apply(ctx: ClientContext): void {
     ctx.slots.register({
       name: 'conversation.view',
       id: 'dsh-fail-soft-panel',
-      label: () => 'dsh-fail-soft',
+      label: () => '@lanbaolu/dsh-fail-soft',
       component: () => ({ render: renderPanel }),
     }),
-  ), 'dsh-fail-soft: panel')
+  ), '@lanbaolu/dsh-fail-soft: panel')
 }

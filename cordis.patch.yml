@@ -1,6 +1,6 @@
-# dsh-fail-soft bundle 层：插入运行期管理服务（隔离列表/恢复/手动隔离 + UI 面板）。
+# @lanbaolu/dsh-fail-soft bundle 层：插入运行期管理服务（隔离列表/恢复/手动隔离 + UI 面板）。
 # 启动期挂载兜底不依赖本 entry —— 由 DSH 内核（DSH_FAIL_SOFT=1）直接加载 lib/mount.js。
 - insert:
-    - id: dsh-fail-soft
-      name: 'dsh-fail-soft'
+    - id: @lanbaolu/dsh-fail-soft
+      name: '@lanbaolu/dsh-fail-soft'
       config: {}

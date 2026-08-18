@@ -1,4 +1,4 @@
-# dsh-fail-soft
+# @lanbaolu/dsh-fail-soft
 
 **插件错误自动隔离**：坏插件被禁用、其余插件照常启动，提供隔离管理与恢复 UI。
 
@@ -35,9 +35,9 @@ node patch-apply.mjs     # 见工作目录 防止插件错误挂不起服务/（
 ```bash
 # 1. 把本插件放进 profile 的依赖并声明 bundle（以 web profile 为例）
 #    ~/.dsh/profiles/web/package.json:
-#      "dependencies": { "dsh-fail-soft": "link:<本目录>" }
-#      "dsh": { "profile": { "bundles": [ ..., "dsh-fail-soft" ] } }
-# 2. 建 junction：node_modules/dsh-fail-soft → 本目录
+#      "dependencies": { "@lanbaolu/dsh-fail-soft": "link:<本目录>" }
+#      "dsh": { "profile": { "bundles": [ ..., "@lanbaolu/dsh-fail-soft" ] } }
+# 2. 建 junction：node_modules/@lanbaolu/dsh-fail-soft → 本目录
 # 3. 构建时已 link 运行时依赖（@deepseek-ai/dsh-app-boot、@deepseek-ai/dsh-tools
 #    进本插件的 node_modules），无需额外安装。
 ```
@@ -55,7 +55,7 @@ echo 'export DSH_FAIL_SOFT=1' >> ~/.zshrc          # 永久
 ## 使用
 
 - **自动隔离**：坏插件激活失败 → 诊断打印 + 写
-  `- id: <entryId>\n  disabled: true`（带 `# quarantined by dsh-fail-soft`
+  `- id: <entryId>\n  disabled: true`（带 `# quarantined by @lanbaolu/dsh-fail-soft`
   注释）到 profile 的 `cordis.patch.yml` → 剔除重试挂载 → 服务照常起。
 - **工具**（模型可直接调用）：`fail_soft_status` / `fail_soft_list` /
   `fail_soft_restore` / `fail_soft_quarantine`。

@@ -1,5 +1,5 @@
 {
-  "name": "dsh-fail-soft",
+  "name": "@lanbaolu/dsh-fail-soft",
   "version": "0.0.1",
   "description": "插件错误自动隔离：坏插件被禁用、其余插件照常启动，提供隔离管理与恢复 UI",
   "private": true,
@@ -11,13 +11,13 @@
     "cordis.patch.yml"
   ],
   "license": "BSD-3-Clause",
-  "homepage": "https://github.com/lanbaolu/dsh-fail-soft#readme",
+  "homepage": "https://github.com/lanbaolu/@lanbaolu/dsh-fail-soft#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lanbaolu/dsh-fail-soft.git"
+    "url": "git+https://github.com/lanbaolu/@lanbaolu/dsh-fail-soft.git"
   },
   "bugs": {
-    "url": "https://github.com/lanbaolu/dsh-fail-soft/issues"
+    "url": "https://github.com/lanbaolu/@lanbaolu/dsh-fail-soft/issues"
   },
   "keywords": [
     "dsh",
@@ -67,5 +67,9 @@
       ],
       "platform": "web"
     }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }
