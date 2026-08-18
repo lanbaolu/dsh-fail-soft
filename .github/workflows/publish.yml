@@ -22,8 +22,7 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Install dependencies
-        run: npm ci
-
+      # 本插件 host 为手写 JS、client 已构建并随仓库提交，lib/ 与
+      # cordis.patch.yml 即发布产物，无需 npm ci / build。
       - name: Publish to npm
         run: npm publish --provenance --access public
