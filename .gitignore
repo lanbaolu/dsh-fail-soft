@@ -2,3 +2,7 @@ node_modules/
 *.tgz
 *.tsbuildinfo
 lib/client.js.map
+
+# backup 模板目录只跟踪 orig/patched 模板；临时/备份产物忽略
+backup/*.tmp
+backup/*.bak*
