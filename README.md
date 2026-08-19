@@ -1,6 +1,8 @@
 # @lanbaolu/dsh-fail-soft
 
-> ✅ **当前状态：核心稳定候选（v0.1.2）**
+> ✅ **当前状态：核心稳定候选（v0.1.3）**
+>
+> **v0.1.3**：文档同步版——npm 包 README 补全 v0.1.2 的修复说明（无代码改动）。
 >
 > **v0.1.2 修复 2026-08-19 启动崩溃**：补上缺失的 `profileDirOf` /
 > `readFailSoftSwitch` / `writeFailSoftSwitch`（此前被调用但从未定义，插件
@@ -11,6 +13,7 @@
 >
 > 发布走 Trusted Publishing 自动上传：`git tag vX.Y.Z && git push` →
 > Actions 自动 `npm publish --provenance`（首次 token 发布见「发布」章节）。
+> **任何发布前先跑 `npm run preflight`**（版本/README/tgz/git 一致性门禁）。
 >
 > 仍依赖 DSH 内核补丁，升级 DSH 后请通过 `fail_soft_status` 的 `patch`
 > 字段确认补丁健康状态，若显示 `needs-adaptation` 请先更新 `backup/` 模板

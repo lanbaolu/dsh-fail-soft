@@ -42,7 +42,8 @@
     "build": "bash scripts/build.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build:client": "tsdown",
-    "test": "node --test"
+    "test": "node --test",
+    "preflight": "node scripts/preflight.mjs"
   },
   "exports": {
     ".": "./lib/index.js",
