@@ -2,25 +2,8 @@
 
 > ✅ **当前状态：核心稳定候选（v0.1.4）**
 >
-> **v0.1.4**：README 同步版——npm 包 README 补全 v0.1.3 的文档同步说明
-> （含发布前 preflight 门禁，无代码改动）。
->
-> **v0.1.3**：文档同步版——npm 包 README 补全 v0.1.2 的修复说明。
->
-> **v0.1.2 修复 2026-08-19 启动崩溃**：补上缺失的 `profileDirOf` /
-> `readFailSoftSwitch` / `writeFailSoftSwitch`（此前被调用但从未定义，插件
-> 激活失败被自己隔离）；隔离写入改用 `mergePatchBlock`，profile patch 为
-> 空数组 `[]`（DSH 默认）时**替换**而非追加，杜绝 `[]` + `- id:` 两个 YAML
-> 文档混排导致的解析崩溃（隔离器自己不再写坏 patch）。回归测试 22 → 35
-> 全过（含 profileDirOf / 开关 / mergePatchBlock / `[]` 场景）。
->
-> 发布走 Trusted Publishing 自动上传：`git tag vX.Y.Z && git push` →
-> Actions 自动 `npm publish --provenance`（首次 token 发布见「发布」章节）。
-> **任何发布前先跑 `npm run preflight`**（版本/README/tgz/git 一致性门禁）。
->
-> 仍依赖 DSH 内核补丁，升级 DSH 后请通过 `fail_soft_status` 的 `patch`
-> 字段确认补丁健康状态，若显示 `needs-adaptation` 请先更新 `backup/` 模板
-> 再继续使用。
+> 仍依赖 DSH 内核补丁：升级 DSH 后请通过 `fail_soft_status` 的 `patch` 字段
+> 确认补丁健康状态，若显示 `needs-adaptation` 请先更新 `backup/` 模板再继续使用。
 
 **插件错误自动隔离**：坏插件被禁用、其余插件照常启动，提供隔离管理与恢复 UI。
 
@@ -39,7 +22,7 @@ DSH 的插件装配是 fail-loud：bundle 里**任何一个**插件加载/激活
 |---|---|---|
 | 挂载兜底 | `lib/mount.js` | 被 DSH 内核（`DSH_FAIL_SOFT=1` 时）在 include 树挂载前动态加载：坏插件 → 隔离 → 剔除重试 |
 | 运行期服务 | `lib/index.js` | `failSoft` 服务 + `fail_soft_*` 工具 + `/api/fail-soft/*` HTTP API |
-| 上下文工具 | `lib/context-utils.js` | `profileDirOf` / 持久化开关读写（零 DSH 依赖，CI 可单测，0.1.2 抽出） |
+| 上下文工具 | `lib/context-utils.js` | `profileDirOf` / 持久化开关读写（零 DSH 依赖） |
 | UI 面板 | `lib/client.js` | conversation.view 面板：隔离列表 + 一键恢复 |
 
 ## 前置条件（一次性）
@@ -128,46 +111,13 @@ echo 'export DSH_FAIL_SOFT=1' >> ~/.zshrc          # 永久（仅终端启动生
   注释）到 profile 的 `cordis.patch.yml` → 剔除重试挂载 → 服务照常起。
   写入经 `mergePatchBlock` 合并（0.1.2 起）：patch 是空数组 `[]`（DSH 默认
   无补丁形态）时用条目块**替换**而非追加，产出始终是单个合法 YAML 数组——隔离器
-  自己不会再写坏 patch（2026-08-19 事故根因之一）。
+  自己不会再写坏 patch。
 - **工具**（模型可直接调用）：`fail_soft_status` / `fail_soft_list` /
   `fail_soft_restore` / `fail_soft_quarantine`。
 - **HTTP API**：`GET /api/fail-soft/status`、`GET /api/fail-soft/list`、
   `POST /api/fail-soft/restore {id}`、`POST /api/fail-soft/quarantine {id,name,reason}`。
 - **UI 面板**：web 会话侧栏 conversation.view 显示隔离列表与恢复按钮。
 - **恢复**：修复插件后删除 patch 文件里对应条目（或用 restore 工具/UI）。
-
-## 发布
-
-npm 已上架：`@lanbaolu/dsh-fail-soft`（[npm 页面](https://www.npmjs.com/package/@lanbaolu/dsh-fail-soft)）。
-Trusted Publishing（GitHub Actions OIDC）已配置，**打 tag 即自动发布**：
-
-```bash
-npm run build          # host 校验 + link 运行时依赖
-npm run build:client   # tsdown → lib/client.js（UI 面板）
-npm pack               # 检查分发 tgz 内容
-# 发布（TP 自动上传）：打 tag 并 push → Actions 自动 npm publish --provenance
-git tag vX.Y.Z && git push origin vX.Y.Z
-# 发布成功后建 GitHub Release（附件 tgz + 说明）
-gh release create vX.Y.Z lanbaolu-dsh-fail-<ver>.tgz --notes "..."
-```
-
-- 首次发布（包在 npmjs 无页面、无法先配 TP）：npmjs Access Tokens 建 token →
-  真实终端 `npm publish --registry=https://registry.npmjs.org --access public --provenance=false`
-  （2FA 浏览器验证；npm 非 TTY 会把授权 URL 打成 `***`，必须在真实终端跑）。
-- **任何发布动作前先读发布 SOP**（记忆「npm 发布正确流程」），不要凭记忆/猜测执行。
-
-## 构建
-
-```bash
-bash scripts/build.sh      # host 校验 + link 运行时依赖（探测 npx 缓存/DSH_DEPS_ROOT）
-npm run build:client       # tsdown → lib/client.js（UI 面板）
-npm pack                   # 分发 tgz
-```
-
-## 回归测试
-
-工作目录 `防止插件错误挂不起服务/`：`fixtures/`（故意抛错的坏插件）、
-`test-boot.mjs`（直接调 app-boot 验证挂载兜底与 failSoft 服务）。
 
 ## 已知边界
 
@@ -179,3 +129,7 @@ npm pack                   # 分发 tgz
 - 运行期工具/API 采用**延迟注册**：bundle 装配可能早于 `tools`/`webServer`
   服务就绪，插件会监听服务注册事件自动补注册；因此重启后 `fail_soft_*`
   工具和 `/api/fail-soft/*` 会随服务就绪自动出现，**不需要手动热重载**。
+
+## 开发者
+
+构建 / 发布（TP 自动上传 + preflight 门禁）/ 回归测试等维护流程见 **`RELEASE.md`**。
