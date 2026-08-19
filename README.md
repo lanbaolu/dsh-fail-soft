@@ -120,18 +120,22 @@ echo 'export DSH_FAIL_SOFT=1' >> ~/.zshrc          # 永久（仅终端启动生
 ## 发布
 
 npm 已上架：`@lanbaolu/dsh-fail-soft`（[npm 页面](https://www.npmjs.com/package/@lanbaolu/dsh-fail-soft)）。
-发布在本地手动执行（发布动作不随仓库分发）：
+Trusted Publishing（GitHub Actions OIDC）已配置，**打 tag 即自动发布**：
 
 ```bash
 npm run build          # host 校验 + link 运行时依赖
 npm run build:client   # tsdown → lib/client.js（UI 面板）
 npm pack               # 检查分发 tgz 内容
-# 真实终端发布（2FA 浏览器验证）：
-npm publish --provenance
+# 发布（TP 自动上传）：打 tag 并 push → Actions 自动 npm publish --provenance
+git tag vX.Y.Z && git push origin vX.Y.Z
+# 发布成功后建 GitHub Release（附件 tgz + 说明）
+gh release create vX.Y.Z lanbaolu-dsh-fail-<ver>.tgz --notes "..."
 ```
 
-- 首次手动发布（新包无 TP）：npmjs Access Tokens 建 token → 真实终端 `npm publish --provenance=false`（2FA 浏览器验证）。
-- 发布成功后再打 `vX.Y.Z` tag 并建 GitHub Release；`publishConfig` 保留 `provenance: true`，后续如需恢复自动发布可重新配置 Trusted Publishing。
+- 首次发布（包在 npmjs 无页面、无法先配 TP）：npmjs Access Tokens 建 token →
+  真实终端 `npm publish --registry=https://registry.npmjs.org --access public --provenance=false`
+  （2FA 浏览器验证；npm 非 TTY 会把授权 URL 打成 `***`，必须在真实终端跑）。
+- **任何发布动作前先读发布 SOP**（记忆「npm 发布正确流程」），不要凭记忆/猜测执行。
 
 ## 构建
 
