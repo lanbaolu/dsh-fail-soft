@@ -13,7 +13,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { readFailSoftSwitch, writeFailSoftSwitch } from '../lib/index.js'
+import { readFailSoftSwitch, writeFailSoftSwitch } from '../lib/context-utils.js'
 
 const SWITCH_FILE = join(homedir(), '.dsh', 'fail-soft.json')
 

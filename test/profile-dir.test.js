@@ -11,7 +11,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { profileDirOf } from '../lib/index.js'
+import { profileDirOf } from '../lib/context-utils.js'
 
 test('profileDirOf: 目录 URL（以 / 结尾）→ 去尾斜杠得 profile 目录', () => {
   const ctx = { baseUrl: 'file:///Users/odis/.dsh/profiles/web/' }
