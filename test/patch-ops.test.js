@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { QUARANTINE_MARKER, readPatchEntries, removePatchEntry, quarantinePlugin } from '../lib/patch-ops.js'
@@ -122,6 +122,36 @@ test('quarantinePlugin: patch 为 []（DSH 默认空数组）时替换而非追�
     assert.ok(!body.includes('[]')) // 空数组被替换
     assert.match(body, /- id: manual-bad\n\s+disabled: true/)
     assert.ok(!/\[\s*\]\s*\n\s*-\s*id:/.test(body))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('quarantinePlugin: 写前自动备份（.bak.* 含写前内容）', () => {
+  const dir = tmpProfile('- id: existing\n  disabled: false\n')
+  try {
+    const res = quarantinePlugin(dir, 'manual-bad', 'pkg-m', 'test')
+    assert.ok(res.ok)
+    const baks = readdirSync(dir).filter((f) => f.startsWith('cordis.patch.yml.bak.'))
+    assert.equal(baks.length, 1)
+    const bak = readFileSync(join(dir, baks[0]), 'utf8')
+    assert.ok(bak.includes('- id: existing'))
+    assert.ok(!bak.includes('manual-bad'))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('removePatchEntry: 写前自动备份（.bak.* 含删除前内容）', () => {
+  const dir = tmpProfile(`# quarantined by ${QUARANTINE_MARKER} at 2026-01-01T00:00:00.000Z — bad: pkg: boom\n- id: bad\n  disabled: true\n`)
+  try {
+    const res = removePatchEntry(dir, 'bad')
+    assert.ok(res.ok)
+    const baks = readdirSync(dir).filter((f) => f.startsWith('cordis.patch.yml.bak.'))
+    assert.equal(baks.length, 1)
+    const bak = readFileSync(join(dir, baks[0]), 'utf8')
+    assert.ok(bak.includes('- id: bad')) // 备份保留了删除前的内容
+    assert.ok(!readFileSync(join(dir, 'cordis.patch.yml'), 'utf8').includes('- id: bad'))
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { parseEnv } from "node:util";
 import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path";
 import * as yaml from "js-yaml";
@@ -561,7 +561,7 @@ function loadProfile(binName, name, installAnchor, home = resolveDshHome(), opti
 		dir,
 		layers,
 		patchPath,
-		patches: options.userLayer !== false && existsSync(patchPath) ? loadOverlayPatches(binName, patchPath) : []
+		patches: options.userLayer !== false && existsSync(patchPath) ? loadUserPatchLayerFailSoft(binName, patchPath) : []
 	};
 }
 /**
@@ -816,6 +816,68 @@ function loadOverlayPatches(binName, file) {
 		throw new Error(`${binName}: failed to read overlay ${file}: ${String(error)}`);
 	}
 	return parsePatchList(binName, file, content, "overlay");
+}
+/**
+* Load the profile's user-layer `cordis.patch.yml` with fail-soft defense.
+*
+* 配置层防御（2026-08-19）：用户手滑写坏 cordis.patch.yml 的 YAML 时，DSH
+* 在插件加载前解析失败，纯插件无法兜住。这里在 fail-soft 模式下给出明确诊断，
+* 并尝试从 fail-soft 写前自动生成的备份（cordis.patch.yml.bak.<ISO>，由插件
+* `backupPatchFile` 在每次写 patch 前生成）恢复最近一份合法的；非 fail-soft
+* 也给出"如何恢复"提示。
+* @param binName - the diagnostic prefix.
+* @param patchPath - absolute path of the profile's cordis.patch.yml.
+* @returns the parsed patch list (possibly recovered).
+*/
+function loadUserPatchLayerFailSoft(binName, patchPath) {
+	try {
+		return loadOverlayPatches(binName, patchPath);
+	} catch (error) {
+		const detail = error instanceof Error ? error.message : String(error);
+		if (isFailSoft()) {
+			writeFailSoftDiagnostic(`${binName}: [fail-soft] 用户层 ${PROFILE_PATCH_FILENAME} 解析失败，尝试从最近备份自动恢复…\n  ${detail}`);
+			const recovered = recoverPatchFromBackups(patchPath);
+			if (recovered !== null) {
+				writeFailSoftDiagnostic(`${binName}: [fail-soft] ✅ 已从备份恢复 ${patchPath}（来源 ${recovered}）——启动继续。若想保留你的手动修改，请检查恢复后的文件。`);
+				return loadOverlayPatches(binName, patchPath);
+			}
+			writeFailSoftDiagnostic(`${binName}: [fail-soft] ⚠️ 无可用备份——请修复 ${patchPath} 的 YAML（常见：缩进错、[] 与 - id: 混排），或手动从 ${patchPath}.bak.* 恢复。`);
+		} else {
+			writeFailSoftDiagnostic(`${binName}: 用户层 ${PROFILE_PATCH_FILENAME} 解析失败：\n  ${detail}\n  修复 YAML 或从 ${patchPath}.bak.* 恢复后重启。`);
+		}
+		throw error;
+	}
+}
+/**
+* Scan `cordis.patch.yml.bak.<ISO>` backups (newest first), pick the first one
+* that parses as valid user-patch YAML, write it back to `patchPath`.
+* @returns the backup path used, or null when none is usable.
+*/
+function recoverPatchFromBackups(patchPath) {
+	const dir = dirname(patchPath);
+	const base = basename(patchPath);
+	// 只认 fail-soft 自己的写前备份格式：cordis.patch.yml.bak.<ISO>（replace /[:.]/g → '-'）
+	// 形如 2026-08-19T16-50-39-000Z。排除其它旧命名（20260819-…、带 -before-fix 等后缀），
+	// 那些可能是用户/工具的手动备份，不该被自动覆盖；同格式下字典序即时间序。
+	const isoPattern = new RegExp(`^${base}\\.bak\\.\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z$`);
+	let backups;
+	try {
+		backups = readdirSync(dir).filter((f) => isoPattern.test(f)).sort().reverse();
+	} catch {
+		return null;
+	}
+	for (const name of backups) {
+		const candidate = join(dir, name);
+		try {
+			const content = readFileSync(candidate, "utf8");
+			yaml.load(content, { schema: userPatchesSchema });
+			writeFileSync(patchPath, content);
+			return candidate;
+		} catch {
+			// 该备份也不合法，试下一个
+		}
+	}
+	return null;
 }
 /**
 * Parse one loader patch list: a top-level YAML array of

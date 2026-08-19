@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -149,6 +149,26 @@ test('quarantineEntries: profile patch 为 []（空数组）时合并后仍为�
     assert.match(body, /- id: bad\n\s+disabled: true/)
     // 关键：不再有 `[]` + `- id:` 混排（正是 2026-08-19 崩溃的 YAML 形态）
     assert.ok(!/\[\s*\]\s*\n\s*-\s*id:/.test(body))
+  } finally {
+    cleanup(dir)
+  }
+})
+
+test('quarantineEntries: 写前自动备份 cordis.patch.yml（.bak.* 含写前内容）', () => {
+  const dir = tmpProfile()
+  try {
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, PROFILE_PATCH_FILENAME), '# head\n- id: good\n  disabled: false\n', 'utf8')
+    quarantineEntries(dir, [{ id: 'bad', message: 'boom' }])
+    // 生成了恰好一份备份，内容为写前（不含 bad）
+    const baks = readdirSync(dir).filter((f) => f.startsWith(`${PROFILE_PATCH_FILENAME}.bak.`))
+    assert.equal(baks.length, 1)
+    const bak = readFileSync(join(dir, baks[0]), 'utf8')
+    assert.ok(bak.includes('- id: good'))
+    assert.ok(!bak.includes('- id: bad'))
+    // 当前文件已含 bad
+    const now = readFileSync(join(dir, PROFILE_PATCH_FILENAME), 'utf8')
+    assert.ok(now.includes('- id: bad'))
   } finally {
     cleanup(dir)
   }
