@@ -1143,9 +1143,28 @@ const FAIL_LOUD_RELEASE_TIMEOUT_MS = 2e3;
 * failing loud. Opt-in via `DSH_FAIL_SOFT=1|true|yes|on`; the default stays
 * fail-loud so a broken plugin is never silently skipped.
 */
+/**
+* Read the persisted fail-soft switch file `~/.dsh/fail-soft.json`.
+* Written by the dsh-fail-soft plugin's `fail_soft_set_enabled` tool/API,
+* so App/GUI users can enable fail-soft without setting an environment
+* variable (which many launch paths never inherit). Missing/invalid file
+* means "not enabled via switch".
+* @returns true when the file declares `{ "enabled": true }`.
+*/
+function readFailSoftSwitch() {
+	try {
+		const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+		const p = join(home, ".dsh", "fail-soft.json");
+		const data = JSON.parse(readFileSync(p, "utf8"));
+		return data?.enabled === true;
+	} catch {
+		return false;
+	}
+}
 function isFailSoft() {
 	const value = process.env.DSH_FAIL_SOFT ?? "";
-	return value === "1" || value === "true" || value === "yes" || value === "on";
+	if (value === "1" || value === "true" || value === "yes" || value === "on") return true;
+	return readFailSoftSwitch();
 }
 /** Write one fail-soft diagnostic line to stderr. */
 function writeFailSoftDiagnostic(line) {

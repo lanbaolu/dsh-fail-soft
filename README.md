@@ -81,13 +81,26 @@ UI 面板（🧩 行）查看。命令行重打：`node patch-apply.mjs`（与�
 
 ## 启用 fail-soft
 
+### 方式一：持久化开关（推荐，终端 / App 通用）
+
+> 插件 **0.0.8+** 提供持久化开关，**App 启动（不加载 shell 环境变量）也能用**：
+> 内核补丁启动时读取 `~/.dsh/fail-soft.json`，无需手动设置任何环境变量。
+
+- 工具：`fail_soft_set_enabled(true)` / `fail_soft_set_enabled(false)`
+- API：`POST /api/fail-soft/set-enabled`，body `{ "enabled": true }`
+- 效果：写入 `~/.dsh/fail-soft.json`，**重启 dsh 后生效**；
+  `fail_soft_status` 的 `switchEnabled` / `enabled` 字段反映当前开关状态。
+
+### 方式二：环境变量（原有）
+
 ```bash
 DSH_FAIL_SOFT=1 npx @deepseek-ai/dsh web          # 临时
-echo 'export DSH_FAIL_SOFT=1' >> ~/.zshrc          # 永久
+echo 'export DSH_FAIL_SOFT=1' >> ~/.zshrc          # 永久（仅终端启动生效）
 ```
 
 `DSH_FAIL_SOFT` 取值：`1|true|yes|on`。可用 `DSH_FAIL_SOFT_MODULE` 覆盖
-内核加载的挂载模块（默认按包名解析本插件）。
+内核加载的挂载模块（默认按包名解析本插件）。环境变量与持久化开关二者
+任一开启即生效。
 
 ## 使用
 
