@@ -1,8 +1,11 @@
 # @lanbaolu/dsh-fail-soft
 
-> ✅ **当前状态：核心稳定候选（v0.1.3）**
+> ✅ **当前状态：核心稳定候选（v0.1.4）**
 >
-> **v0.1.3**：文档同步版——npm 包 README 补全 v0.1.2 的修复说明（无代码改动）。
+> **v0.1.4**：README 同步版——npm 包 README 补全 v0.1.3 的文档同步说明
+> （含发布前 preflight 门禁，无代码改动）。
+>
+> **v0.1.3**：文档同步版——npm 包 README 补全 v0.1.2 的修复说明。
 >
 > **v0.1.2 修复 2026-08-19 启动崩溃**：补上缺失的 `profileDirOf` /
 > `readFailSoftSwitch` / `writeFailSoftSwitch`（此前被调用但从未定义，插件
