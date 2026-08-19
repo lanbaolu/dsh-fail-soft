@@ -1,6 +1,6 @@
 {
   "name": "@lanbaolu/dsh-fail-soft",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "插件错误自动隔离：坏插件被禁用、其余插件照常启动，提供隔离管理与恢复 UI（核心稳定候选）",
   "type": "module",
   "main": "./lib/index.js",
@@ -47,6 +47,9 @@
   "exports": {
     ".": "./lib/index.js",
     "./mount.js": "./lib/mount.js",
+    "./lib/heal.js": "./lib/heal.js",
+    "./lib/mount-core.js": "./lib/mount-core.js",
+    "./lib/patch-ops.js": "./lib/patch-ops.js",
     "./client": "./lib/client.js",
     "./package.json": "./package.json"
   },
