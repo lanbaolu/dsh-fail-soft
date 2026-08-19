@@ -117,19 +117,21 @@ echo 'export DSH_FAIL_SOFT=1' >> ~/.zshrc          # 永久（仅终端启动生
 - **UI 面板**：web 会话侧栏 conversation.view 显示隔离列表与恢复按钮。
 - **恢复**：修复插件后删除 patch 文件里对应条目（或用 restore 工具/UI）。
 
-## 发布（一整套动作）
+## 发布
 
 npm 已上架：`@lanbaolu/dsh-fail-soft`（[npm 页面](https://www.npmjs.com/package/@lanbaolu/dsh-fail-soft)）。
-发布走 **GitHub Actions + npm Trusted Publishing（OIDC）自动上传**，一键完成：
+发布在本地手动执行（发布动作不随仓库分发）：
 
 ```bash
-./scripts/release.sh 0.0.4        # bump → 构建 → 打包 → git → tag(触发 npm 自动上传) → GitHub Release → 验证 npm
-./scripts/release.sh --check       # 发布前置检查
+npm run build          # host 校验 + link 运行时依赖
+npm run build:client   # tsdown → lib/client.js（UI 面板）
+npm pack               # 检查分发 tgz 内容
+# 真实终端发布（2FA 浏览器验证）：
+npm publish --provenance
 ```
 
-- 前置：npm 后台已配 Trusted Publishing（仓库 `lanbaolu/dsh-fail-soft` / workflow `publish.yml`）；`gh` 已登录。
-- 打 `vX.Y.Z` tag 即触发 `.github/workflows/publish.yml` 自动 `npm publish --provenance`。
 - 首次手动发布（新包无 TP）：npmjs Access Tokens 建 token → 真实终端 `npm publish --provenance=false`（2FA 浏览器验证）。
+- 发布成功后再打 `vX.Y.Z` tag 并建 GitHub Release；`publishConfig` 保留 `provenance: true`，后续如需恢复自动发布可重新配置 Trusted Publishing。
 
 ## 构建
 

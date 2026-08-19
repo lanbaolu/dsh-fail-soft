@@ -65,7 +65,7 @@
 
 ### T6（P2）发布新版本
 
-- 当前 `package.json` version `0.0.6`；确认 T1/T2/T3 改动后 bump 版本并走 `scripts/release.sh`
+- 当前 `package.json` version `0.0.6`；确认 T1/T2/T3 改动后 bump 版本并发布（`npm publish`）
 - 验收：npm 包/Release 产物包含修复；tgz 内 `cordis.patch.yml` name 为完整包名
 
 ## 注意事项
