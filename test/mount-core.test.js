@@ -13,6 +13,7 @@ import {
   collectLoaderEntryFailures,
   quarantineEntries,
   filterQuarantinedPatches,
+  mergePatchBlock,
   PROFILE_PATCH_FILENAME,
 } from '../lib/mount-core.js'
 
@@ -100,6 +101,54 @@ test('quarantineEntries: 无有效 id 的 failure 被忽略', () => {
     } catch (e) {
       assert.ok(e.code === 'ENOENT')
     }
+  } finally {
+    cleanup(dir)
+  }
+})
+
+// ── mergePatchBlock（空数组 [] 替换，防 YAML 崩溃）──
+
+test('mergePatchBlock: 空数组 []（DSH 默认）被 block 替换而非追加', () => {
+  const body = '# wechat-bridge（运行时注入，见 dev_inject_plugin）\n\n[]\n'
+  const block = `# quarantined by ${QUARANTINE_MARKER} at 2026-01-01T00:00:00.000Z — bad: boom\n- id: bad\n  disabled: true\n`
+  const merged = mergePatchBlock(body, block)
+  // 顶部注释保留、[] 消失、列表项出现
+  assert.ok(merged.startsWith('# wechat-bridge'))
+  assert.ok(!merged.includes('[]'))
+  assert.ok(merged.includes('- id: bad'))
+  assert.ok(merged.includes('disabled: true'))
+  // 绝不残留 `[]` + `- id:` 两个文档混排的非法形态
+  assert.ok(!/\[\s*\]/.test(merged))
+})
+
+test('mergePatchBlock: 已是列表（- id:）则直接追加', () => {
+  const body = '- id: good\n  disabled: false\n'
+  const merged = mergePatchBlock(body, '- id: bad\n  disabled: true\n')
+  assert.ok(merged.includes('- id: good'))
+  assert.ok(merged.includes('- id: bad'))
+})
+
+test('mergePatchBlock: 空文件直接写入 block', () => {
+  assert.equal(mergePatchBlock('', '- id: bad\n'), '- id: bad\n')
+})
+
+test('mergePatchBlock: 无尾换行时自动补一个', () => {
+  const merged = mergePatchBlock('- id: good', '- id: bad\n  disabled: true\n')
+  assert.ok(merged.includes('- id: good\n- id: bad'))
+})
+
+test('quarantineEntries: profile patch 为 []（空数组）时合并后仍为合法列表', () => {
+  const dir = tmpProfile()
+  try {
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, PROFILE_PATCH_FILENAME), '# wechat-bridge（运行时注入，见 dev_inject_plugin）\n\n[]\n', 'utf8')
+    const written = quarantineEntries(dir, [{ id: 'bad', message: 'pkg: boom' }])
+    assert.deepEqual(written, ['bad'])
+    const body = readFileSync(join(dir, PROFILE_PATCH_FILENAME), 'utf8')
+    assert.ok(!body.includes('[]')) // 空数组被替换
+    assert.match(body, /- id: bad\n\s+disabled: true/)
+    // 关键：不再有 `[]` + `- id:` 混排（正是 2026-08-19 崩溃的 YAML 形态）
+    assert.ok(!/\[\s*\]\s*\n\s*-\s*id:/.test(body))
   } finally {
     cleanup(dir)
   }

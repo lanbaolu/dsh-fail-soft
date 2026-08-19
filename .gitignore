@@ -6,3 +6,6 @@ lib/client.js.map
 # backup 模板目录只跟踪 orig/patched 模板；临时/备份产物忽略
 backup/*.tmp
 backup/*.bak*
+
+# dev_build_plugin 本地构建依赖清单（含绝对路径，勿提交）
+.dsh-build-deps.json

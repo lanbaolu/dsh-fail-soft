@@ -111,3 +111,18 @@ test('quarantinePlugin: 写入 disabled + 隔离标记；已存在则拒绝', ()
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('quarantinePlugin: patch 为 []（DSH 默认空数组）时替换而非追加，保持合法 YAML', () => {
+  // 2026-08-19 真实事故形态：`[]` + `- id:` 两个文档混排 → 解析崩溃。
+  const dir = tmpProfile('# wechat-bridge（运行时注入，见 dev_inject_plugin）\n\n[]\n')
+  try {
+    const res = quarantinePlugin(dir, 'manual-bad', 'pkg-m', 'test')
+    assert.ok(res.ok)
+    const body = readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')
+    assert.ok(!body.includes('[]')) // 空数组被替换
+    assert.match(body, /- id: manual-bad\n\s+disabled: true/)
+    assert.ok(!/\[\s*\]\s*\n\s*-\s*id:/.test(body))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
