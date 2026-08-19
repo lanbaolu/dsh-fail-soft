@@ -48,8 +48,22 @@ UI 面板（🧩 行）查看。命令行重打：`node patch-apply.mjs`（与�
 
 ## 安装（装入 profile）
 
+> ⚠️ **命名必须与包名完全一致**：本插件的包名是 **`@lanbaolu/dsh-fail-soft`**（带 scope）。
+> profile 的 dependencies key、`bundles` 条目、node_modules 链接、以及
+> `cordis.patch.yml` 的 insert `name` **必须全部使用这个完整包名**。
+> **不要**因为仓库/目录名是 `dsh-fail-soft` 或 tgz 文件名是
+> `lanbaolu-dsh-fail-soft-*.tgz` 就注册成裸名 `dsh-fail-soft` ——
+> 那样 DSH 会按 `@lanbaolu/dsh-fail-soft` 找模块而找不到，启动直接
+> `ERR_MODULE_NOT_FOUND` 崩溃（2026-08-19 事故根因）。
+>
+> 推荐使用 DSH 官方或注入器安装，它们会自动按包名注册：
+> ```bash
+> dsh plugin --profile web add @lanbaolu/dsh-fail-soft   # 官方 pnpm 转发
+> # 或 dev_install_package(dir=<插件目录>)              # super-injector 热装配
+> ```
+
 ```bash
-# 1. 把本插件放进 profile 的依赖并声明 bundle（以 web profile 为例）
+# 手动装（务必保留完整包名，以 web profile 为例）
 #    ~/.dsh/profiles/web/package.json:
 #      "dependencies": { "@lanbaolu/dsh-fail-soft": "link:<本目录>" }
 #      "dsh": { "profile": { "bundles": [ ..., "@lanbaolu/dsh-fail-soft" ] } }
@@ -113,3 +127,6 @@ npm pack                   # 分发 tgz
   语法错）仍 fail-loud——那是配置错误，不该静默。
 - 每轮最多隔离一批失败插件并重试，5 轮后放弃（服务以降级树启动，不崩）。
 - 挂载期自动隔离需要内核补丁 + `DSH_FAIL_SOFT=1`（崩溃在插件加载前）。
+- 运行期工具/API 采用**延迟注册**：bundle 装配可能早于 `tools`/`webServer`
+  服务就绪，插件会监听服务注册事件自动补注册；因此重启后 `fail_soft_*`
+  工具和 `/api/fail-soft/*` 会随服务就绪自动出现，**不需要手动热重载**。
