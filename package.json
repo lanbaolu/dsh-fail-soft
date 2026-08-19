@@ -7,6 +7,9 @@
   "types": "./lib/types/index.d.ts",
   "files": [
     "lib",
+    "backup",
+    "backup/dsh-app-boot.index.js.orig",
+    "backup/dsh-profile-boot.js.orig",
     "cordis.patch.yml"
   ],
   "license": "BSD-3-Clause",
