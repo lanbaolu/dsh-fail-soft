@@ -1,10 +1,9 @@
 {
   "name": "@lanbaolu/dsh-fail-soft",
-  "version": "0.0.11",
-  "description": "插件错误自动隔离：坏插件被禁用、其余插件照常启动，提供隔离管理与恢复 UI（实验性 / 暂不稳定）",
+  "version": "0.1.0",
+  "description": "插件错误自动隔离：坏插件被禁用、其余插件照常启动，提供隔离管理与恢复 UI（核心稳定候选）",
   "type": "module",
   "main": "./lib/index.js",
-  "types": "./lib/types/index.d.ts",
   "files": [
     "lib",
     "backup",
@@ -42,18 +41,13 @@
   "scripts": {
     "build": "bash scripts/build.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build:client": "tsdown"
+    "build:client": "tsdown",
+    "test": "node --test"
   },
   "exports": {
-    ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
-    },
+    ".": "./lib/index.js",
     "./mount.js": "./lib/mount.js",
-    "./client": {
-      "types": "./lib/types/client/index.d.ts",
-      "default": "./lib/client.js"
-    },
+    "./client": "./lib/client.js",
     "./package.json": "./package.json"
   },
   "dsh": {
