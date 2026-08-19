@@ -88,6 +88,7 @@ UI 面板（🧩 行）查看。命令行重打：`node patch-apply.mjs`（与�
 > 插件 **0.0.8+** 提供持久化开关，**App 启动（不加载 shell 环境变量）也能用**：
 > 内核补丁启动时读取 `~/.dsh/fail-soft.json`，无需手动设置任何环境变量。
 
+- **UI（0.0.10+）**：DSH 设置面板 → 「Fail-soft 隔离」区域，一键开关；
 - 工具：`fail_soft_set_enabled(true)` / `fail_soft_set_enabled(false)`
 - API：`POST /api/fail-soft/set-enabled`，body `{ "enabled": true }`
 - 效果：写入 `~/.dsh/fail-soft.json`，**重启 dsh 后生效**；
