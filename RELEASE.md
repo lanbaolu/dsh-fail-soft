@@ -41,10 +41,37 @@ gh release view vX.Y.Z --json assets            # 附件齐全（tgz）
 npm view @lanbaolu/dsh-fail-soft readme | head   # npm 包 README 已同步（publish 时打包）
 ```
 
+## 配置层防御（0.1.6 起）
+
+- **写前自动备份**：fail-soft 每次写 `cordis.patch.yml`（隔离/恢复）前把原文件备份为
+  `cordis.patch.yml.bak.<ISO>`（保留最近 10 份）——`lib/mount-core.js backupPatchFile`。
+- **解析失败自动恢复**：内核补丁 `loadProfile`（`loadUserPatchLayerFailSoft`）在
+  **fail-soft 模式**下，用户层 patch YAML 解析失败时：明确诊断（文件/错误/恢复建议）
+  → 从最近**合法**备份自动恢复（只认 `.bak.<ISO>` 格式、按时间取最新，排除旧命名/
+  带后缀的手动备份）→ 启动继续；非 fail-soft 也提示如何恢复。
+- 真实验证（2026-08-19）：手动写坏 patch（`[]` + `- id:` 混排）→ 重启 → 日志诊断 +
+  自动恢复 + 服务照常起（fail-soft/usage-stats 正常）。
+
+## 内核补丁维护（上游化前的过渡策略）
+
+> 外部评审指出侵入式内核补丁是最大技术债。治本 = 上游化（T4，向
+> `deepseek-ai/deepseek-harness` 提 PR，见 STATUS「Next phase」）。过渡期用以下
+> **补丁维护/回滚机制**持续保障，DSH 升级后按此体检：
+
+1. **状态体检**：`cd 防止插件错误挂不起服务 && node patch-apply.mjs --check`
+   - `ok` = 已打且匹配模板；
+   - `needs-apply` = 补丁丢失（npx 重装）→ 重打：`node patch-apply.mjs`；
+   - `needs-adaptation` = 官方改了结构 → **更新 `backup/` 模板**（抓官方新版→重打→存模板）
+     再重打，绝不盲覆盖。
+2. **回滚**：手动 `cp backup/dsh-app-boot.index.js.orig <DSH>/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js`
+   （profile-boot 同理）——回到官方原版，插件的运行期服务/UI 仍可用（仅挂载兜底不生效）。
+3. **cordis.patch.yml 去重自愈**：`dev_fix_patch`（修复 duplicate loader entry id）。
+4. **配置层兜底**：上面的写前备份 + 解析失败自动恢复，让手滑/补丁冲突不拖垮启动。
+
 ## 回归测试（维护验证）
 
 ```bash
-npm test                       # 35 个单测（含 profileDirOf/开关/mergePatchBlock/[] 场景）
+npm test                       # 38 个单测（含 profileDirOf/开关/mergePatchBlock/[]/写前备份 场景）
 node scripts/preflight.mjs     # 一致性门禁
 # 挂载兜底独立 profile 端到端（fixtures 坏插件）：
 #   工作目录 防止插件错误挂不起服务/：node test-boot.mjs <profile>

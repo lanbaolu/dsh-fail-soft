@@ -121,9 +121,11 @@ echo 'export DSH_FAIL_SOFT=1' >> ~/.zshrc          # 永久（仅终端启动生
 
 ## 已知边界
 
-- 只兜"插件加载/激活失败"。profile 的 `cordis.patch.yml` 本身写坏（**用户手动
-  手写的 YAML 语法错**）仍 fail-loud——那是配置错误，不该静默；本插件自己的
-  隔离写入已由 `mergePatchBlock` 保证合法（0.1.2 起，空数组 `[]` 替换而非追加）。
+- 只兜"插件加载/激活失败"。profile 的 `cordis.patch.yml` 用户手写坏（YAML
+  语法错）：fail-soft 下会**给出诊断并自动从写前备份恢复**（0.1.6 起，
+  写前备份 `.bak.<ISO>` + 解析失败自动恢复）；非 fail-soft 仍 fail-loud，
+  但会提示如何恢复。本插件自己的隔离写入由 `mergePatchBlock` 保证合法
+  （0.1.2 起，空数组 `[]` 替换而非追加）。
 - 每轮最多隔离一批失败插件并重试，5 轮后放弃（服务以降级树启动，不崩）。
 - 挂载期自动隔离需要内核补丁 + `DSH_FAIL_SOFT=1`（崩溃在插件加载前）。
 - 运行期工具/API 采用**延迟注册**：bundle 装配可能早于 `tools`/`webServer`
