@@ -1,11 +1,20 @@
 # @lanbaolu/dsh-fail-soft
 
-> ✅ **当前状态：核心稳定候选（v0.1.0）**
+> ✅ **当前状态：核心稳定候选（v0.1.2）**
 >
-> 已补齐自动化测试（隔离写入 / 解析 / 恢复 / 补丁自愈三分支，`npm test`），
-> 并抽出 `getPatchStatus()` 供 doctor 等管理面调用。仍依赖 DSH 内核补丁，
-> 升级 DSH 后请通过 `fail_soft_status` 的 `patch` 字段确认补丁健康状态，
-> 若显示 `needs-adaptation` 请先更新 `backup/` 模板再继续使用。
+> **v0.1.2 修复 2026-08-19 启动崩溃**：补上缺失的 `profileDirOf` /
+> `readFailSoftSwitch` / `writeFailSoftSwitch`（此前被调用但从未定义，插件
+> 激活失败被自己隔离）；隔离写入改用 `mergePatchBlock`，profile patch 为
+> 空数组 `[]`（DSH 默认）时**替换**而非追加，杜绝 `[]` + `- id:` 两个 YAML
+> 文档混排导致的解析崩溃（隔离器自己不再写坏 patch）。回归测试 22 → 35
+> 全过（含 profileDirOf / 开关 / mergePatchBlock / `[]` 场景）。
+>
+> 发布走 Trusted Publishing 自动上传：`git tag vX.Y.Z && git push` →
+> Actions 自动 `npm publish --provenance`（首次 token 发布见「发布」章节）。
+>
+> 仍依赖 DSH 内核补丁，升级 DSH 后请通过 `fail_soft_status` 的 `patch`
+> 字段确认补丁健康状态，若显示 `needs-adaptation` 请先更新 `backup/` 模板
+> 再继续使用。
 
 **插件错误自动隔离**：坏插件被禁用、其余插件照常启动，提供隔离管理与恢复 UI。
 
@@ -24,6 +33,7 @@ DSH 的插件装配是 fail-loud：bundle 里**任何一个**插件加载/激活
 |---|---|---|
 | 挂载兜底 | `lib/mount.js` | 被 DSH 内核（`DSH_FAIL_SOFT=1` 时）在 include 树挂载前动态加载：坏插件 → 隔离 → 剔除重试 |
 | 运行期服务 | `lib/index.js` | `failSoft` 服务 + `fail_soft_*` 工具 + `/api/fail-soft/*` HTTP API |
+| 上下文工具 | `lib/context-utils.js` | `profileDirOf` / 持久化开关读写（零 DSH 依赖，CI 可单测，0.1.2 抽出） |
 | UI 面板 | `lib/client.js` | conversation.view 面板：隔离列表 + 一键恢复 |
 
 ## 前置条件（一次性）
@@ -110,6 +120,9 @@ echo 'export DSH_FAIL_SOFT=1' >> ~/.zshrc          # 永久（仅终端启动生
 - **自动隔离**：坏插件激活失败 → 诊断打印 + 写
   `- id: <entryId>\n  disabled: true`（带 `# quarantined by @lanbaolu/dsh-fail-soft`
   注释）到 profile 的 `cordis.patch.yml` → 剔除重试挂载 → 服务照常起。
+  写入经 `mergePatchBlock` 合并（0.1.2 起）：patch 是空数组 `[]`（DSH 默认
+  无补丁形态）时用条目块**替换**而非追加，产出始终是单个合法 YAML 数组——隔离器
+  自己不会再写坏 patch（2026-08-19 事故根因之一）。
 - **工具**（模型可直接调用）：`fail_soft_status` / `fail_soft_list` /
   `fail_soft_restore` / `fail_soft_quarantine`。
 - **HTTP API**：`GET /api/fail-soft/status`、`GET /api/fail-soft/list`、
@@ -152,8 +165,9 @@ npm pack                   # 分发 tgz
 
 ## 已知边界
 
-- 只兜"插件加载/激活失败"。profile 的 `cordis.patch.yml` 本身写坏（YAML
-  语法错）仍 fail-loud——那是配置错误，不该静默。
+- 只兜"插件加载/激活失败"。profile 的 `cordis.patch.yml` 本身写坏（**用户手动
+  手写的 YAML 语法错**）仍 fail-loud——那是配置错误，不该静默；本插件自己的
+  隔离写入已由 `mergePatchBlock` 保证合法（0.1.2 起，空数组 `[]` 替换而非追加）。
 - 每轮最多隔离一批失败插件并重试，5 轮后放弃（服务以降级树启动，不崩）。
 - 挂载期自动隔离需要内核补丁 + `DSH_FAIL_SOFT=1`（崩溃在插件加载前）。
 - 运行期工具/API 采用**延迟注册**：bundle 装配可能早于 `tools`/`webServer`
