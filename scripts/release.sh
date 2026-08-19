@@ -39,7 +39,7 @@ if [ "$VERSION" = "--check" ] || [ -z "$VERSION" ]; then
 fi
 
 # 版本号校验：x.y.z
-[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || die "版本号格式错误: $VERSION（应为 x.y.z 或 x.y.z-rc.n）"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || die "版本号格式错误: ${VERSION}（应为 x.y.z 或 x.y.z-rc.n）"
 
 # ── 1. bump 版本 ──
 node -e "
@@ -90,7 +90,7 @@ if [ "$NO_GIT" = "0" ]; then
   for i in $(seq 1 20); do
     sleep 6
     LATEST="$(curl -s --max-time 8 "https://registry.npmjs.org/-/package/@lanbaolu%2fdsh-fail-soft/dist-tags" 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).latest)}catch{console.log('')}})" 2>/dev/null || true)"
-    if [ "$LATEST" = "$VERSION" ]; then ok "npm 已发布 $VERSION（dist-tags latest）"; exit 0; fi
+    if [ "$LATEST" = "$VERSION" ]; then ok "npm 已发布 ${VERSION}（dist-tags latest）"; exit 0; fi
   done
   die "npm 自动上传未在预期时间内完成（检查 GitHub Actions / npm 后台 TP 配置）"
 fi
