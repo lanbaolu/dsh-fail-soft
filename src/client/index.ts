@@ -1,10 +1,15 @@
 /**
- * @lanbaolu/dsh-fail-soft — client 面板（conversation.view slot）。
+ * @lanbaolu/dsh-fail-soft — client 设置面板（settings.section slot）。
  *
- * 展示 fail-soft 状态与被隔离插件列表，支持一键恢复（调 host
- * /api/fail-soft/*）。构建：npm run build:client（tsdown → lib/client.js，
- * ModuleLoader.load 注册）。
+ * 在 DSH 设置面板注册「Fail-soft 隔离」区域：
+ * - 显示当前启用状态 / 持久化开关状态 / 内核补丁健康 / 被隔离插件；
+ * - 提供 fail-soft 持久化开关（写 ~/.dsh/fail-soft.json，重启后生效），
+ *   App / 终端用户都无需设置 DSH_FAIL_SOFT 环境变量。
+ *
+ * 构建：npm run build:client（tsdown → lib/client.js，ModuleLoader 包装）。
  */
+// @ts-nocheck
+import * as React from 'react'
 import type { SlotsService } from '@deepseek-ai/dsh-client-ui-slots'
 
 type ClientContext = {
@@ -13,126 +18,106 @@ type ClientContext = {
 
 export const inject = ['slots']
 
-function el(tag: string, text?: string, className?: string): HTMLElement {
-  const node = document.createElement(tag)
-  if (text !== undefined) node.textContent = text
-  if (className) node.className = className
-  return node
-}
+/** 设置面板里的 fail-soft 区域。 */
+function FailSoftSettingsSection() {
+  const [status, setStatus] = React.useState(null)
+  const [saving, setSaving] = React.useState(false)
+  const [message, setMessage] = React.useState('')
 
-function renderPanel(): HTMLElement {
-  const root = el('div', undefined, 'dsh-fail-soft-panel')
-  root.style.cssText = 'padding:14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.6;'
-
-  const title = el('div', '🔧 @lanbaolu/dsh-fail-soft — 插件错误隔离', undefined)
-  title.style.cssText = 'font-weight:700;margin-bottom:8px;'
-  root.appendChild(title)
-
-  const statusLine = el('div', '状态：读取中…', undefined)
-  statusLine.style.cssText = 'margin-bottom:10px;color:#888;'
-  root.appendChild(statusLine)
-
-  const patchLine = el('div', '', undefined)
-  patchLine.style.cssText = 'margin-bottom:10px;color:#888;font-size:12px;'
-  root.appendChild(patchLine)
-
-  const listBox = el('div', undefined, undefined)
-  listBox.style.cssText = 'display:flex;flex-direction:column;gap:6px;'
-  root.appendChild(listBox)
-
-  async function refresh() {
+  const refresh = async () => {
     try {
       const res = await fetch('/api/fail-soft/status')
-      const status = await res.json()
-      // 内核补丁健康状态（跟随 DSH 官方更新）
-      const p = status.patch ?? {}
-      if (p.status === 'ok') {
-        patchLine.textContent = `🧩 内核补丁：正常（DSH ${p.version ?? '?'}）`
-        patchLine.style.color = '#4a9a4a'
-      } else if (p.status === 'checking') {
-        patchLine.textContent = '🧩 内核补丁：检测中…'
-        patchLine.style.color = '#888'
-      } else if (p.status === 'repaired') {
-        patchLine.textContent = `🧩 内核补丁：已自动重打（${(p.applied ?? []).join(', ')}）——重启后生效`
-        patchLine.style.color = '#d0a030'
-      } else if (p.status === 'needs-adaptation' || p.status === 'failed' || p.status === 'no-install') {
-        patchLine.textContent = `🧩 内核补丁：⚠️ 需要适配（${p.error ?? p.status}）`
-        patchLine.style.color = '#ff6b6b'
-      } else {
-        patchLine.textContent = `🧩 内核补丁：${p.status}`
-      }
-      const damaged = (status.quarantined ?? []).length
-      if (damaged > 0) {
-        // 有损坏插件：醒目红色横幅 + 状态行
-        statusLine.textContent = `⚠️ 有 ${damaged} 个插件已损坏，已被自动隔离（其余插件不受影响）`
-        statusLine.style.cssText = 'margin-bottom:10px;color:#ff6b6b;font-weight:700;background:#2a1518;border:1px solid #7a2a2a;border-radius:6px;padding:8px 10px;'
-        title.textContent = `🔧 @lanbaolu/dsh-fail-soft — ⚠️ ${damaged} 个插件已损坏`
-        title.style.color = '#ff6b6b'
-      } else {
-        statusLine.textContent = `状态：${status.enabled ? '✅ fail-soft 已启用' : '⚠️ 未启用（启动时设置 DSH_FAIL_SOFT=1）'} ｜ 无损坏插件`
-        statusLine.style.cssText = 'margin-bottom:10px;color:#888;'
-        title.textContent = '🔧 @lanbaolu/dsh-fail-soft — 插件错误隔离'
-        title.style.color = ''
-      }
-      listBox.replaceChildren()
-      if (damaged === 0) {
-        listBox.appendChild(el('div', '（没有被隔离的插件）', undefined))
-        return
-      }
-      for (const item of status.quarantined) {
-        const row = el('div', undefined, undefined)
-        row.style.cssText = 'display:flex;align-items:center;gap:8px;background:#2a1518;border:1px solid #7a2a2a;border-radius:6px;padding:6px 10px;'
-        const info = el('span', `⛔ ${item.id}（已损坏，已隔离）`, undefined)
-        info.style.cssText = 'font-weight:600;color:#ff6b6b;flex:1;'
-        row.appendChild(info)
-        if (item.reason) {
-          const reason = el('span', (item.reason || '').slice(0, 90), undefined)
-          reason.style.cssText = 'color:#999;font-size:12px;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
-          row.appendChild(reason)
-        }
-        const btn = el('button', '恢复', undefined)
-        btn.style.cssText = 'background:#2c5f2c;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;'
-        btn.addEventListener('click', async () => {
-          btn.disabled = true
-          btn.textContent = '…'
-          try {
-            const r = await fetch('/api/fail-soft/restore', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ id: item.id }),
-            })
-            const result = await r.json()
-            if (result.ok) {
-              btn.textContent = '✅ 已恢复（重启后重新装配）'
-            } else {
-              btn.textContent = '❌ ' + (result.error || '失败')
-              btn.disabled = false
-            }
-          } catch {
-            btn.textContent = '❌ 请求失败'
-            btn.disabled = false
-          }
-          await new Promise((resolve) => setTimeout(resolve, 1200))
-          void refresh()
-        })
-        row.appendChild(btn)
-        listBox.appendChild(row)
-      }
+      setStatus(await res.json())
     } catch {
-      statusLine.textContent = '状态：无法连接 host API（/api/fail-soft）'
-      statusLine.style.color = '#c03030'
+      setStatus(null)
     }
   }
+  React.useEffect(() => {
+    void refresh()
+  }, [])
 
-  void refresh()
-  const timer = setInterval(() => void refresh(), 15000)
-  root.addEventListener('disconnected', () => clearInterval(timer))
+  const toggle = async () => {
+    const next = !(status?.switchEnabled === true)
+    setSaving(true)
+    setMessage('')
+    try {
+      const res = await fetch('/api/fail-soft/set-enabled', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ enabled: next }),
+      })
+      const result = await res.json()
+      if (result?.ok) {
+        setMessage(next ? '✅ 已开启，重启 dsh 后生效' : '✅ 已关闭，重启 dsh 后生效')
+        await refresh()
+      } else {
+        setMessage('❌ ' + (result?.error || '设置失败'))
+      }
+    } catch {
+      setMessage('❌ 请求失败')
+    }
+    setSaving(false)
+  }
 
-  return root
+  const switchOn = status?.switchEnabled === true
+  const enabled = status?.enabled === true
+  const quarantined = status?.quarantined ?? []
+  const patch = status?.patch ?? {}
+  const patchText =
+    patch.status === 'ok' ? '✅ 正常'
+    : patch.status === 'checking' ? '检测中…'
+    : patch.status === 'repaired' ? '✅ 已自动重打（重启后生效）'
+    : patch.status === 'needs-adaptation' || patch.status === 'failed' || patch.status === 'no-install' ? '⚠️ 需适配'
+    : String(patch.status ?? '?')
+
+  const row = { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }
+  const label = { fontSize: 13, fontWeight: 600 }
+  const hint = { fontSize: 12, color: 'var(--dsw-alias-label-tertiary, #999)', marginBottom: 8, lineHeight: 1.5 }
+  const btn = {
+    padding: '6px 14px',
+    borderRadius: 8,
+    border: '1px solid var(--dsw-alias-border-l2, #ddd)',
+    background: switchOn ? '#2c5f2c' : '#5f2c2c',
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: 13,
+  }
+  const badge = {
+    padding: '2px 10px',
+    borderRadius: 999,
+    fontSize: 12,
+    background: enabled ? '#1d3a1d' : '#3a1d1d',
+    color: enabled ? '#6fce6f' : '#ff8f8f',
+  }
+
+  return React.createElement('div', { style: { padding: '4px 0' } },
+    React.createElement('div', { style: { fontSize: 13, marginBottom: 8 } },
+      '🔧 fail-soft：插件错误自动隔离（坏插件被隔离，其余插件照常启动）'),
+    React.createElement('div', { style: row },
+      React.createElement('span', { style: badge }, enabled ? '✅ 已启用' : '未启用'),
+      React.createElement('span', { style: label }, switchOn ? '开关：开' : '开关：关'),
+      React.createElement('button', {
+        onClick: () => void toggle(),
+        disabled: saving || !status,
+        style: btn,
+      }, saving ? '…' : (switchOn ? '关闭 fail-soft' : '开启 fail-soft')),
+    ),
+    React.createElement('div', { style: hint },
+      '开关写入 ~/.dsh/fail-soft.json，内核启动时读取；App / 终端都无需设置环境变量。切换后请重启 dsh 生效。'),
+    message ? React.createElement('div', { style: { fontSize: 12, marginBottom: 8, color: '#8f8fff' } }, message) : null,
+    React.createElement('div', { style: hint }, '🧩 内核补丁：' + patchText),
+    quarantined.length > 0
+      ? React.createElement('div', { style: { fontSize: 12, color: '#ff8f8f', marginTop: 6 } },
+          '⛔ 已隔离 ' + quarantined.length + ' 个插件：' + quarantined.map((q) => q.id).join(', '))
+      : null,
+  )
 }
 
-export function apply(_ctx: ClientContext): void {
-  // 对话视图面板已移除（2026-08-19）：旧式 DOM 对象组件不被 DSH slots 渲染器
-  // 支持（渲染空白占位），且状态信息经 fail_soft_status / fail_soft_list 工具
-  // 即可查询，无需常驻对话界面。保留空 apply 以维持 client 模块契约。
+export function apply(ctx: ClientContext): void {
+  ctx.effect(() => ctx.slots.register({
+    name: 'settings.section',
+    id: 'dsh-fail-soft',
+    label: () => 'Fail-soft 隔离',
+    inject: () => ({}),
+  }, () => React.createElement(FailSoftSettingsSection)), '@lanbaolu/dsh-fail-soft: settings section')
 }
