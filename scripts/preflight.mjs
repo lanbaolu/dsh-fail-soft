@@ -27,7 +27,8 @@ const issues = []
 
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 const version = pkg.version
-const pkgBase = pkg.name.split('/').pop()
+// npm pack 对 scoped 包（@scope/name）的 tgz 命名：scope-name-version.tgz（去掉 @ 与 /）。
+const pkgBase = pkg.name.replace(/^@/, '').replace('/', '-')
 
 // ── 1. README 顶部版本一致 ──
 const readme = readFileSync(join(ROOT, 'README.md'), 'utf8')
