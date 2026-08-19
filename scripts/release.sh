@@ -75,6 +75,8 @@ fi
 # ── 7. GitHub Release ──
 NOTES="## @lanbaolu/dsh-fail-soft v$VERSION
 
+> ⚠️ 当前状态：实验性 / 暂不稳定。生产环境请谨慎使用，升级 DSH 后请确认内核补丁健康状态（fail_soft_status 的 patch 字段）。
+
 插件错误自动隔离：坏插件被禁用、其余插件照常启动，服务不再被单个坏插件拖垮。
 
 - 内核委托插槽 + 挂载兜底（lib/mount.js）
