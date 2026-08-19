@@ -131,13 +131,8 @@ function renderPanel(): HTMLElement {
   return root
 }
 
-export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.slots.inject('conversation.view', () =>
-    ctx.slots.register({
-      name: 'conversation.view',
-      id: 'dsh-fail-soft-panel',
-      label: () => '@lanbaolu/dsh-fail-soft',
-      component: () => ({ render: renderPanel }),
-    }),
-  ), '@lanbaolu/dsh-fail-soft: panel')
+export function apply(_ctx: ClientContext): void {
+  // 对话视图面板已移除（2026-08-19）：旧式 DOM 对象组件不被 DSH slots 渲染器
+  // 支持（渲染空白占位），且状态信息经 fail_soft_status / fail_soft_list 工具
+  // 即可查询，无需常驻对话界面。保留空 apply 以维持 client 模块契约。
 }
