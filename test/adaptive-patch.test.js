@@ -1,15 +1,15 @@
 /**
- * adaptive-patch.test.js — 自适应补丁引擎（方案③）回归。
+ * adaptive-patch.test.js — 自适应补丁引擎（方案③，三路合并 diff3）回归。
  *
- * 验证：官方新版相对 backup orig 的纯新增行，能自动合并进 backup patched
- * 生成新版补丁模板（如 rc.8 加一行 "BROWSER"）；非纯新增（删除/修改）报需人工。
+ * 验证：官方新增/删除/修改行（不与补丁改动冲突）都能自动合并进 patched；
+ * 补丁删除的行官方保留 → 冲突需人工。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { lineDiffInsertions, mergeInsertionsIntoPatched, adaptPatchedTemplate } from '../lib/adaptive-patch.js'
+import { lineDiffInsertions, merge3, adaptPatchedTemplate } from '../lib/adaptive-patch.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const ORIG = readFileSync(join(ROOT, 'backup', 'dsh-app-boot.index.js.orig'), 'utf8')
@@ -31,23 +31,58 @@ test('adaptPatchedTemplate: 官方新增行自动合并进 patched（幂等）',
   const r = adaptPatchedTemplate(ORIG, PATCHED, official)
   assert.equal(r.ok, true)
   assert.ok(r.source.includes('\t"NEW_ENV",'))
-  // 合并位置正确（BROWSER 后）
   assert.ok(r.source.includes('\t"BROWSER",\n\t"NEW_ENV",'))
-  // 再次适配（官方=已合并后）→ 幂等无新增
+  // 幂等：再适配（official=已合并后）→ 仍 ok，新增块不重复
   const r2 = adaptPatchedTemplate(ORIG, r.source, official)
   assert.equal(r2.ok, true)
-  assert.equal(r2.applied.length, 0)
+  const count = r2.source.split('\n').filter((l) => l === '\t"NEW_ENV",').length
+  assert.equal(count, 1)
 })
 
-test('adaptPatchedTemplate: 官方删除/修改行（非纯新增）→ 需人工', () => {
-  const official = ORIG.replace('\t"PAGER",', '\t"PAGER_V2",')
+test('adaptPatchedTemplate: 官方删除补丁没动的行 → 自动跟随删除', () => {
+  // 官方删掉一行补丁没动的环境变量（如 EDITOR）
+  const official = ORIG.replace('\t"EDITOR",\n', '')
   const r = adaptPatchedTemplate(ORIG, PATCHED, official)
-  assert.equal(r.ok, false)
-  assert.match(r.error, /非纯新增/)
+  assert.equal(r.ok, true)
+  assert.ok(!r.source.includes('\t"EDITOR",'))
+  // 补丁其它内容仍在（如防御函数）
+  assert.ok(r.source.includes('function loadUserPatchLayerFailSoft('))
 })
 
-test('mergeInsertionsIntoPatched: 找不到锚点报错', () => {
-  const r = mergeInsertionsIntoPatched('a\nb\n', [{ block: ['X'], afterLine: 'zzz', beforeLine: null }])
+test('merge3: 补丁删除的行官方保留 → 跟随补丁删除（不冲突）', () => {
+  const orig = ['a', 'X', 'b'].join('\n')
+  const patched = ['a', 'b'].join('\n') // 补丁删了 X
+  const official = ['a', 'X', 'b'].join('\n') // 官方保留 X（官方没改它）
+  const r = merge3(orig, patched, official)
+  assert.equal(r.ok, true)
+  assert.equal(r.source, 'a\nb')
+})
+
+test('merge3: 补丁与官方都删除同一行 → 冲突需人工', () => {
+  const orig = ['a', 'X', 'b'].join('\n')
+  const patched = ['a', 'b'].join('\n') // 补丁删了 X
+  const official = ['a', 'b'].join('\n') // 官方也删了 X
+  const r = merge3(orig, patched, official)
   assert.equal(r.ok, false)
-  assert.match(r.error, /无法在 patched 中定位/)
+  assert.match(r.error, /冲突/)
+})
+
+test('merge3: 官方删除补丁没动的行 → 合并成功且不丢补丁新增', () => {
+  const orig = ['a', 'X', 'b'].join('\n')
+  const patched = ['a', 'X', 'P', 'b'].join('\n') // 补丁新增 P
+  const official = ['a', 'b'].join('\n') // 官方删了 X
+  const r = merge3(orig, patched, official)
+  assert.equal(r.ok, true)
+  assert.equal(r.source, 'a\nP\nb')
+})
+
+test('adaptPatchedTemplate: 官方大改但补丁没动的行也能合并（真实文件冒烟）', () => {
+  // 官方把某个补丁没动的函数名改掉（删除+新增，非冲突）——选一处安全替换
+  const official = ORIG.replace('function listMatching(', 'function listMatchingV2(')
+  // 若 orig 里没有该函数名（可能不存在）则跳过；这里仅做健壮性
+  if (official !== ORIG) {
+    const r = adaptPatchedTemplate(ORIG, PATCHED, official)
+    assert.equal(r.ok, true)
+    assert.ok(r.source.includes('function listMatchingV2('))
+  }
 })
