@@ -17,7 +17,7 @@ const clientBundle: UserConfig = {
   format: 'cjs',
   platform: 'browser',
   dts: false,
-  sourcemap: true,
+  sourcemap: false,
   clean: false,
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
