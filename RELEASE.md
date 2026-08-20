@@ -73,14 +73,17 @@ npm view @lanbaolu/dsh-fail-soft readme | head   # npm 包 README 已同步（pu
   只要不与补丁改动冲突）都自动合并：
   - 官方删了补丁没动的行 → 跟随官方删除；
   - 补丁删了官方没动的行 → 跟随补丁删除；
-  - 双方删同一行 / 同一锚点插不同内容 → 冲突，报需人工；
-  - 相同内容块去重（幂等）。
+  - 双方删同一行 → 一致删除，**不冲突**（0.1.11 修正）；
+  - 同一锚点双方插**不同**内容 → 冲突，返回详细诊断（锚点/补丁/官方上下文），需人工；
+  - 相同内容块去重（幂等）；重复行按计数处理（0.1.11）。
   - 合并后 `node --check` 校验，失败回滚，绝不产出坏补丁。
+- **profile-boot 也纳入三路合并（0.1.11）**：`repairPatch` 自动适配 app-boot 与
+  含 `installFailLoud` 的 profile-boot 两者。
 - **命令**：`patch-apply.mjs --adapt`（只诊断不写回）；`--repair` 在
   needs-adaptation 时**自动尝试适配**（成功=repaired/adapt，失败=自动回滚+指引）。
-- **端到端验证（P0，2026-08-19）**：隔离临时 DSH 安装上构造官方大改（新增
-  `NEW_ENV` + 删除 `EDITOR` + 修改注释），真实跑 `repairPatch`：
-  `status=repaired/adapt`、`check=ok`、83 个变更块合并，官方改动+补丁全部锚点保留、
+- **端到端验证（P0/P1，2026-08-19）**：隔离临时 DSH 安装上构造官方大改（新增
+  `NEW_ENV` + 删除 `EDITOR` + 修改注释，且 app-boot/profile-boot 同时改），真实跑
+  `repairPatch`：`status=repaired/adapt`、`check=ok`、两者都自动合并、补丁锚点全保留、
   语法 OK；真实 backup 验证后恢复零污染。
 
 ## 修复引擎（方案②，0.1.8 起）——集成 dsh-fix 能力

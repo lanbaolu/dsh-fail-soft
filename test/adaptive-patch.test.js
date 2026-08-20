@@ -58,13 +58,31 @@ test('merge3: 补丁删除的行官方保留 → 跟随补丁删除（不冲突�
   assert.equal(r.source, 'a\nb')
 })
 
-test('merge3: 补丁与官方都删除同一行 → 冲突需人工', () => {
+test('merge3: 补丁与官方都删除同一行 → 一致删除，不冲突', () => {
   const orig = ['a', 'X', 'b'].join('\n')
   const patched = ['a', 'b'].join('\n') // 补丁删了 X
   const official = ['a', 'b'].join('\n') // 官方也删了 X
   const r = merge3(orig, patched, official)
+  assert.equal(r.ok, true)
+  assert.equal(r.source, 'a\nb')
+})
+
+test('merge3: 同一锚点双方插入不同内容 → 冲突并带诊断', () => {
+  const orig = ['a', 'b'].join('\n')
+  const patched = ['a', 'P1', 'b'].join('\n') // 补丁在 a 后插 P1
+  const official = ['a', 'P2', 'b'].join('\n') // 官方在 a 后插 P2
+  const r = merge3(orig, patched, official)
   assert.equal(r.ok, false)
   assert.match(r.error, /冲突/)
+  assert.ok(r.conflicts[0].patch.includes('P1'))
+  assert.ok(r.conflicts[0].official.includes('P2'))
+})
+
+test('lineDiffInsertions: 重复行按计数处理（删除一个重复行不算新增）', () => {
+  const orig = ['a', '}', 'b', '}'].join('\n') // 两个 }
+  const official = ['a', '}', 'b'].join('\n') // 官方删了一个 }
+  const ins = lineDiffInsertions(orig.split('\n'), official.split('\n'))
+  assert.equal(ins.length, 0) // 没有新增
 })
 
 test('merge3: 官方删除补丁没动的行 → 合并成功且不丢补丁新增', () => {

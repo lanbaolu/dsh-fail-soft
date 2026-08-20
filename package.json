@@ -1,6 +1,6 @@
 {
   "name": "@lanbaolu/dsh-fail-soft",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "插件错误自动隔离：坏插件被禁用、其余插件照常启动，提供隔离管理与恢复 UI（核心稳定候选）",
   "type": "module",
   "main": "./lib/index.js",
