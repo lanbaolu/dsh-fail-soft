@@ -52,6 +52,29 @@ npm view @lanbaolu/dsh-fail-soft readme | head   # npm 包 README 已同步（pu
 - 真实验证（2026-08-19）：手动写坏 patch（`[]` + `- id:` 混排）→ 重启 → 日志诊断 +
   自动恢复 + 服务照常起（fail-soft/usage-stats 正常）。
 
+## 静默退出（方案①，0.1.7 起）
+
+> 前提：DSH 版本变更（如 rc.8）仍可能让内核补丁/插件出错。方案① 保证：
+> **fail-soft 补丁自身出错也绝不炸 DSH**——它只兜底插件错误，不能成为新的崩溃源。
+
+内核补丁 4 个 fail-soft 介入点均有顶层 try-catch：
+1. `loadUserPatchLayerFailSoft`：catch 内再保护，恢复逻辑出错不掩盖原始解析错误；
+2. `mountRootIncludeFailSoft`：外层保护，补丁逻辑抛错降级为官方 `mountRootInclude`
+   （最坏回到官方 fail-loud，不是 fail-soft 引入的新崩溃）；
+3. `installFailLoud` fail-soft 分支：隔离逻辑出错仅打印，服务继续、绝不 exit；
+4. `assertEntriesActivated` fail-soft 分支：隔离逻辑出错仅打印，不阻断启动。
+
+## 内核补丁维护（上游化前的过渡策略）
+
+- **写前自动备份**：fail-soft 每次写 `cordis.patch.yml`（隔离/恢复）前把原文件备份为
+  `cordis.patch.yml.bak.<ISO>`（保留最近 10 份）——`lib/mount-core.js backupPatchFile`。
+- **解析失败自动恢复**：内核补丁 `loadProfile`（`loadUserPatchLayerFailSoft`）在
+  **fail-soft 模式**下，用户层 patch YAML 解析失败时：明确诊断（文件/错误/恢复建议）
+  → 从最近**合法**备份自动恢复（只认 `.bak.<ISO>` 格式、按时间取最新，排除旧命名/
+  带后缀的手动备份）→ 启动继续；非 fail-soft 也提示如何恢复。
+- 真实验证（2026-08-19）：手动写坏 patch（`[]` + `- id:` 混排）→ 重启 → 日志诊断 +
+  自动恢复 + 服务照常起（fail-soft/usage-stats 正常）。
+
 ## 内核补丁维护（上游化前的过渡策略）
 
 > 外部评审指出侵入式内核补丁是最大技术债。治本 = 上游化（T4，向
