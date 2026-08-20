@@ -1,6 +1,6 @@
 # @lanbaolu/dsh-fail-soft
 
-> ✅ **当前状态：核心稳定候选（v0.1.7）**
+> ✅ **当前状态：核心稳定候选（v0.1.8）**
 >
 > 仍依赖 DSH 内核补丁：升级 DSH 后请通过 `fail_soft_status` 的 `patch` 字段
 > 确认补丁健康状态，若显示 `needs-adaptation` 请先更新 `backup/` 模板再继续使用。
@@ -113,9 +113,13 @@ echo 'export DSH_FAIL_SOFT=1' >> ~/.zshrc          # 永久（仅终端启动生
   无补丁形态）时用条目块**替换**而非追加，产出始终是单个合法 YAML 数组——隔离器
   自己不会再写坏 patch。
 - **工具**（模型可直接调用）：`fail_soft_status` / `fail_soft_list` /
-  `fail_soft_restore` / `fail_soft_quarantine`。
+  `fail_soft_restore` / `fail_soft_quarantine` / `fail_soft_repair`。
 - **HTTP API**：`GET /api/fail-soft/status`、`GET /api/fail-soft/list`、
-  `POST /api/fail-soft/restore {id}`、`POST /api/fail-soft/quarantine {id,name,reason}`。
+  `POST /api/fail-soft/restore {id}`、`POST /api/fail-soft/quarantine {id,name,reason}`、
+  `POST /api/fail-soft/repair`。
+- **修复引擎（0.1.8+）**：`fail_soft_repair` 一键修复——补丁丢失自动重打；
+  官方改结构自动回滚到官方原版（挂载兜底不生效但服务能起）并给适配指引；
+  同时去重 profile patch 里重复的 entry id（集成 dsh-fix / dev_fix_patch 能力）。
 - **UI 面板**：web 会话侧栏 conversation.view 显示隔离列表与恢复按钮。
 - **恢复**：修复插件后删除 patch 文件里对应条目（或用 restore 工具/UI）。
 

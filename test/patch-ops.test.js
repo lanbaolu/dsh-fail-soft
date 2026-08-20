@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { QUARANTINE_MARKER, readPatchEntries, removePatchEntry, quarantinePlugin } from '../lib/patch-ops.js'
+import { QUARANTINE_MARKER, readPatchEntries, removePatchEntry, quarantinePlugin, fixDuplicatePatchIds } from '../lib/patch-ops.js'
 
 function tmpProfile(initial = '') {
   const dir = mkdtempSync(join(tmpdir(), 'fail-soft-patchops-'))
@@ -152,6 +152,23 @@ test('removePatchEntry: 写前自动备份（.bak.* 含删除前内容）', () =
     const bak = readFileSync(join(dir, baks[0]), 'utf8')
     assert.ok(bak.includes('- id: bad')) // 备份保留了删除前的内容
     assert.ok(!readFileSync(join(dir, 'cordis.patch.yml'), 'utf8').includes('- id: bad'))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('fixDuplicatePatchIds: 重复 entry id 只保留最后一条并写前备份', () => {
+  const dir = tmpProfile('- id: good\n  disabled: false\n- id: good\n  disabled: true\n- id: other\n  disabled: false\n')
+  try {
+    const res = fixDuplicatePatchIds(dir)
+    assert.ok(res.ok)
+    assert.equal(res.removed, 1)
+    const body = readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')
+    assert.equal((body.match(/- id: good/g) || []).length, 1)
+    assert.ok(body.includes('- id: other'))
+    const baks = readdirSync(dir).filter((f) => f.startsWith('cordis.patch.yml.bak.'))
+    assert.equal(baks.length, 1)
+    assert.ok(readFileSync(join(dir, baks[0]), 'utf8').includes('- id: good\n  disabled: false'))
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

@@ -64,16 +64,20 @@ npm view @lanbaolu/dsh-fail-soft readme | head   # npm 包 README 已同步（pu
 3. `installFailLoud` fail-soft 分支：隔离逻辑出错仅打印，服务继续、绝不 exit；
 4. `assertEntriesActivated` fail-soft 分支：隔离逻辑出错仅打印，不阻断启动。
 
-## 内核补丁维护（上游化前的过渡策略）
+## 修复引擎（方案②，0.1.8 起）——集成 dsh-fix 能力
 
-- **写前自动备份**：fail-soft 每次写 `cordis.patch.yml`（隔离/恢复）前把原文件备份为
-  `cordis.patch.yml.bak.<ISO>`（保留最近 10 份）——`lib/mount-core.js backupPatchFile`。
-- **解析失败自动恢复**：内核补丁 `loadProfile`（`loadUserPatchLayerFailSoft`）在
-  **fail-soft 模式**下，用户层 patch YAML 解析失败时：明确诊断（文件/错误/恢复建议）
-  → 从最近**合法**备份自动恢复（只认 `.bak.<ISO>` 格式、按时间取最新，排除旧命名/
-  带后缀的手动备份）→ 启动继续；非 fail-soft 也提示如何恢复。
-- 真实验证（2026-08-19）：手动写坏 patch（`[]` + `- id:` 混排）→ 重启 → 日志诊断 +
-  自动恢复 + 服务照常起（fail-soft/usage-stats 正常）。
+> 目标：补丁失效/配置损坏时有**备用方案**，不再让用户面对"起不来"裸奔。
+
+- **`patch-apply.mjs --repair` / `fail_soft_repair` 工具 / `POST /api/fail-soft/repair`**：
+  - 内核补丁 `ok` → 无需处理；
+  - `needs-apply`（npx 重装丢补丁）→ 自动重打；
+  - `needs-adaptation`（官方改结构）→ **自动回滚到官方原版**（挂载兜底不生效、
+    管理面/UI 仍可用）并给适配指引；
+  - 同时**去重 profile patch 重复 entry id**（集成 dev_fix_patch / dsh-fix 能力，
+    duplicate id 会致启动崩溃）。
+- **`patch-apply.mjs --rollback`**：手动回滚到官方原版（`backup/*.orig`）。
+- 完整闭环已验证（2026-08-19）：`--repair`(ok) → `--rollback`(pristine) →
+  `--repair`(重打恢复 ok)。
 
 ## 内核补丁维护（上游化前的过渡策略）
 
