@@ -78,8 +78,10 @@ npm view @lanbaolu/dsh-fail-soft readme | head   # npm 包 README 已同步（pu
   - 合并后 `node --check` 校验，失败回滚，绝不产出坏补丁。
 - **命令**：`patch-apply.mjs --adapt`（只诊断不写回）；`--repair` 在
   needs-adaptation 时**自动尝试适配**（成功=repaired/adapt，失败=自动回滚+指引）。
-- 端到端验证（2026-08-19）：模拟官方 rc.9 新增 `NEW_ENV` → `--adapt`
-  `adaptive.ok=true`，**82 个补丁变更块全部保留**并合并官方新增。
+- **端到端验证（P0，2026-08-19）**：隔离临时 DSH 安装上构造官方大改（新增
+  `NEW_ENV` + 删除 `EDITOR` + 修改注释），真实跑 `repairPatch`：
+  `status=repaired/adapt`、`check=ok`、83 个变更块合并，官方改动+补丁全部锚点保留、
+  语法 OK；真实 backup 验证后恢复零污染。
 
 ## 修复引擎（方案②，0.1.8 起）——集成 dsh-fix 能力
 
