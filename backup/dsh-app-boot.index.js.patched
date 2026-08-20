@@ -654,6 +654,7 @@ const BOOTSTRAP_NAMES = new Set([
 	"EDITOR",
 	"VISUAL",
 	"PAGER",
+	"BROWSER",
 	"DEEPSEEK_BASE_URL",
 	"DEEPSEEK_SEARCH_BASE_URL",
 	"SSL_CERT_FILE",
@@ -834,16 +835,21 @@ function loadUserPatchLayerFailSoft(binName, patchPath) {
 		return loadOverlayPatches(binName, patchPath);
 	} catch (error) {
 		const detail = error instanceof Error ? error.message : String(error);
-		if (isFailSoft()) {
-			writeFailSoftDiagnostic(`${binName}: [fail-soft] 用户层 ${PROFILE_PATCH_FILENAME} 解析失败，尝试从最近备份自动恢复…\n  ${detail}`);
-			const recovered = recoverPatchFromBackups(patchPath);
-			if (recovered !== null) {
-				writeFailSoftDiagnostic(`${binName}: [fail-soft] ✅ 已从备份恢复 ${patchPath}（来源 ${recovered}）——启动继续。若想保留你的手动修改，请检查恢复后的文件。`);
-				return loadOverlayPatches(binName, patchPath);
+		try {
+			if (isFailSoft()) {
+				writeFailSoftDiagnostic(`${binName}: [fail-soft] 用户层 ${PROFILE_PATCH_FILENAME} 解析失败，尝试从最近备份自动恢复…\n  ${detail}`);
+				const recovered = recoverPatchFromBackups(patchPath);
+				if (recovered !== null) {
+					writeFailSoftDiagnostic(`${binName}: [fail-soft] ✅ 已从备份恢复 ${patchPath}（来源 ${recovered}）——启动继续。若想保留你的手动修改，请检查恢复后的文件。`);
+					return loadOverlayPatches(binName, patchPath);
+				}
+				writeFailSoftDiagnostic(`${binName}: [fail-soft] ⚠️ 无可用备份——请修复 ${patchPath} 的 YAML（常见：缩进错、[] 与 - id: 混排），或手动从 ${patchPath}.bak.* 恢复。`);
+			} else {
+				writeFailSoftDiagnostic(`${binName}: 用户层 ${PROFILE_PATCH_FILENAME} 解析失败：\n  ${detail}\n  修复 YAML 或从 ${patchPath}.bak.* 恢复后重启。`);
 			}
-			writeFailSoftDiagnostic(`${binName}: [fail-soft] ⚠️ 无可用备份——请修复 ${patchPath} 的 YAML（常见：缩进错、[] 与 - id: 混排），或手动从 ${patchPath}.bak.* 恢复。`);
-		} else {
-			writeFailSoftDiagnostic(`${binName}: 用户层 ${PROFILE_PATCH_FILENAME} 解析失败：\n  ${detail}\n  修复 YAML 或从 ${patchPath}.bak.* 恢复后重启。`);
+		} catch (guardError) {
+			// 静默退出：fail-soft 自身处理逻辑出错时，绝不掩盖原始解析错误，也绝不因此炸 DSH。
+			writeFailSoftDiagnostic(`${binName}: [fail-soft] fail-soft guard itself threw while handling a broken patch (${guardError instanceof Error ? guardError.message : String(guardError)}); reporting the original parse error`);
 		}
 		throw error;
 	}
@@ -1139,6 +1145,16 @@ async function loadFailSoftPluginMount(profileDir) {
 * @returns the mounted include entry, or `undefined` when fail-soft gave up.
 */
 async function mountRootIncludeFailSoft(binName, ctx, absoluteConfigPath, patches, bareModuleBaseUrl) {
+	try {
+		return await mountRootIncludeFailSoftImpl(binName, ctx, absoluteConfigPath, patches, bareModuleBaseUrl);
+	} catch (error) {
+		// 静默退出：fail-soft 补丁自身出错绝不炸 DSH——降级为官方原版挂载，
+		// 让 DSH 按原版行为继续（最坏回到 fail-loud，但不是 fail-soft 引入的新崩溃）。
+		writeFailSoftDiagnostic(`${binName}: [fail-soft] fail-soft mount guard itself threw (${error instanceof Error ? error.stack ?? error.message : String(error)}); falling back to the official mountRootInclude`);
+		return mountRootInclude(ctx, absoluteConfigPath, patches, bareModuleBaseUrl);
+	}
+}
+async function mountRootIncludeFailSoftImpl(binName, ctx, absoluteConfigPath, patches, bareModuleBaseUrl) {
 	const pluginMount = await loadFailSoftPluginMount(dirname(absoluteConfigPath));
 	if (pluginMount !== void 0) {
 		try {
@@ -1266,19 +1282,24 @@ function installFailLoud(binName, proc = process, release, profileDir) {
 	const handler = (err) => {
 		if (assembledActivationRejections.has(err)) return;
 		if (isFailSoft()) {
-			const detail = err instanceof Error ? err.stack ?? err.message : String(err);
-			proc.stderr.write(`${binName}: [fail-soft] plugin runtime rejection (the service continues): ${detail}\n`);
-			if (profileDir) {
-				const match = /loader entry (\S+) \(([^)]+)\)/.exec(err instanceof Error ? err.message : String(err));
-				if (match) {
-					const id = match[1];
-					const name = match[2];
-					const written = quarantineEntries(binName, profileDir, [{
-						id,
-						message: `${name}: ${String(detail).split("\n")[0]}`
-					}]);
-					if (written.length > 0) proc.stderr.write(`${binName}: [fail-soft] quarantined plugin "${name}" (entry ${id}) — wrote disabled patch into ${join(profileDir, PROFILE_PATCH_FILENAME)}; fix the plugin, then remove that entry to re-enable it.\n`);
+			try {
+				const detail = err instanceof Error ? err.stack ?? err.message : String(err);
+				proc.stderr.write(`${binName}: [fail-soft] plugin runtime rejection (the service continues): ${detail}\n`);
+				if (profileDir) {
+					const match = /loader entry (\S+) \(([^)]+)\)/.exec(err instanceof Error ? err.message : String(err));
+					if (match) {
+						const id = match[1];
+						const name = match[2];
+						const written = quarantineEntries(binName, profileDir, [{
+							id,
+							message: `${name}: ${String(detail).split("\n")[0]}`
+						}]);
+						if (written.length > 0) proc.stderr.write(`${binName}: [fail-soft] quarantined plugin "${name}" (entry ${id}) — wrote disabled patch into ${join(profileDir, PROFILE_PATCH_FILENAME)}; fix the plugin, then remove that entry to re-enable it.\n`);
+					}
 				}
+			} catch (guardError) {
+				// 静默退出：fail-soft 运行期隔离逻辑自身出错时，仅打印诊断，服务继续，绝不 exit。
+				proc.stderr.write(`${binName}: [fail-soft] fail-soft runtime guard itself threw (${guardError instanceof Error ? guardError.message : String(guardError)}); keeping the service running without quarantine\n`);
 			}
 			return;
 		}
@@ -1441,17 +1462,22 @@ async function assertEntriesActivated(ctx, binName) {
 	const noun = failures.length === 1 ? "entry" : "entries";
 	const detail = failures.map((failure) => failure.message).join("\n");
 	if (!quarantine) throw new Error(`${binName}: ${String(failures.length)} ${noun} did not activate\n${detail}`);
-	let profileDir;
 	try {
-		// ctx.baseUrl 是 profile 目录 URL（以 "/" 结尾）——去尾斜杠即 profile
-		// 目录；不能 dirname（尾斜杠会被当作文件名切到上级目录，隔离 patch
-		// 会写错地方）。
-		profileDir = ctx.baseUrl ? fileURLToPath(ctx.baseUrl).replace(/[\\/]+$/, "") : void 0;
-	} catch {
-		profileDir = void 0;
+		let profileDir;
+		try {
+			// ctx.baseUrl 是 profile 目录 URL（以 "/" 结尾）——去尾斜杠即 profile
+			// 目录；不能 dirname（尾斜杠会被当作文件名切到上级目录，隔离 patch
+			// 会写错地方）。
+			profileDir = ctx.baseUrl ? fileURLToPath(ctx.baseUrl).replace(/[\\/]+$/, "") : void 0;
+		} catch {
+			profileDir = void 0;
+		}
+		const quarantined = profileDir ? quarantineEntries(binName, profileDir, failures) : [];
+		writeFailSoftDiagnostic(`${binName}: [fail-soft] ${String(failures.length)} ${noun} did not activate; the rest of the service continues.\n${detail}\n${binName}: [fail-soft] quarantine: ${quarantined.length > 0 ? `wrote disabled patch into ${join(profileDir ?? "", PROFILE_PATCH_FILENAME)} for: ${quarantined.join(", ")}` : "no new disabled patch written (already quarantined, or profile dir unavailable)"}\n${binName}: [fail-soft] to re-enable a quarantined plugin, fix it and remove its disabled entry from the profile's cordis.patch.yml.`);
+	} catch (guardError) {
+		// 静默退出：fail-soft 激活审计的隔离逻辑自身出错时，仅打印诊断，服务继续，不阻断启动。
+		writeFailSoftDiagnostic(`${binName}: [fail-soft] fail-soft activate guard itself threw (${guardError instanceof Error ? guardError.message : String(guardError)}); keeping the service running without quarantine`);
 	}
-	const quarantined = profileDir ? quarantineEntries(binName, profileDir, failures) : [];
-	writeFailSoftDiagnostic(`${binName}: [fail-soft] ${String(failures.length)} ${noun} did not activate; the rest of the service continues.\n${detail}\n${binName}: [fail-soft] quarantine: ${quarantined.length > 0 ? `wrote disabled patch into ${join(profileDir ?? "", PROFILE_PATCH_FILENAME)} for: ${quarantined.join(", ")}` : "no new disabled patch written (already quarantined, or profile dir unavailable)"}\n${binName}: [fail-soft] to re-enable a quarantined plugin, fix it and remove its disabled entry from the profile's cordis.patch.yml.`);
 }
 /**
 * Boot the Loader against `absoluteConfigPath` and return only after the whole
