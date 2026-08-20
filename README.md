@@ -1,6 +1,6 @@
 # @lanbaolu/dsh-fail-soft
 
-> ✅ **当前状态：核心稳定候选（v0.1.8）**
+> ✅ **当前状态：核心稳定候选（v0.1.9）**
 >
 > 仍依赖 DSH 内核补丁：升级 DSH 后请通过 `fail_soft_status` 的 `patch` 字段
 > 确认补丁健康状态，若显示 `needs-adaptation` 请先更新 `backup/` 模板再继续使用。

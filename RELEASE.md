@@ -64,6 +64,20 @@ npm view @lanbaolu/dsh-fail-soft readme | head   # npm 包 README 已同步（pu
 3. `installFailLoud` fail-soft 分支：隔离逻辑出错仅打印，服务继续、绝不 exit；
 4. `assertEntriesActivated` fail-soft 分支：隔离逻辑出错仅打印，不阻断启动。
 
+## 自适应（方案③，0.1.9 起）——让补丁自动跟上 DSH 版本
+
+> 目标：官方升级导致模板不匹配（needs-adaptation）时，不再等手工更新 backup/ 模板。
+
+- **机制**：`lib/adaptive-patch.js` 模板自动合并——比较官方新版与 backup `orig`，
+  若是**纯新增行**（如 rc.8 加 `"BROWSER"`），自动把新增行块合并进 `patched`，
+  生成新版补丁模板；`node --check` 校验通过后写回 backup 并重新应用。
+- **命令**：`patch-apply.mjs --adapt`（只诊断不写回）；`--repair` 在
+  needs-adaptation 时**自动尝试适配**（成功=repaired/adapt，失败=自动回滚+指引）。
+- **边界（阶段一）**：官方删除/修改已有行（结构大改）→ 非纯新增 → 报需人工
+  适配；完整函数注入属阶段二。
+- 端到端验证（2026-08-19）：模拟官方 rc.9 新增 `NEW_ENV` 行 → `--adapt`
+  识别 `adaptive.ok=true` 并列出待合并行。
+
 ## 修复引擎（方案②，0.1.8 起）——集成 dsh-fix 能力
 
 > 目标：补丁失效/配置损坏时有**备用方案**，不再让用户面对"起不来"裸奔。
