@@ -1,6 +1,6 @@
 # @lanbaolu/dsh-fail-soft
 
-> ✅ **当前状态：核心稳定候选（v0.1.13）**
+> ✅ **当前状态：核心稳定候选（v0.1.14）**
 >
 > 仍依赖 DSH 内核补丁：升级 DSH 后请通过 `fail_soft_status` 的 `patch` 字段
 > 确认补丁健康状态，若显示 `needs-adaptation` 请先更新 `backup/` 模板再继续使用。
@@ -86,6 +86,15 @@ UI 面板（🧩 行）查看。命令行重打：`node patch-apply.mjs`（与�
 
 > 插件 **0.0.8+** 提供持久化开关，**App 启动（不加载 shell 环境变量）也能用**：
 > 内核补丁启动时读取 `~/.dsh/fail-soft.json`，无需手动设置任何环境变量。
+>
+> **0.1.14 起首次安装自动启用**：开关文件不存在时，插件激活即写入
+> `enabled: true`（装防崩溃插件本身即启用同意），下次重启生效；已存在的
+> 开关文件一律尊重（含显式 `false`）。装完后无需任何手动开启步骤。
+>
+> ⚠️ 唯一例外：若安装时**服务已经因坏插件起不来**，插件没有机会激活写
+> 开关——先用环境变量进一次安全模式，隔离坏插件后即恢复：
+> `DSH_FAIL_SOFT=1 npx @deepseek-ai/dsh web`（App 用户可手动创建
+> `~/.dsh/fail-soft.json`，内容 `{"enabled": true}`）。
 
 - **UI（0.0.10+）**：DSH 设置面板 → 「Fail-soft 隔离」区域，一键开关；
 - 工具：`fail_soft_set_enabled(true)` / `fail_soft_set_enabled(false)`
@@ -112,6 +121,10 @@ echo 'export DSH_FAIL_SOFT=1' >> ~/.zshrc          # 永久（仅终端启动生
   写入经 `mergePatchBlock` 合并（0.1.2 起）：patch 是空数组 `[]`（DSH 默认
   无补丁形态）时用条目块**替换**而非追加，产出始终是单个合法 YAML 数组——隔离器
   自己不会再写坏 patch。
+  **0.1.14 起分类隔离**：只隔离"真坏插件"。瞬态环境错误（`EADDRINUSE`
+  端口被占等）与官方核心组件（`@deepseek-ai/*`）失败**不写持久隔离**，
+  改为抛回原始错误 fail-loud——避免把端口冲突误判成坏插件、把官方
+  `webserver` 永久隔离导致"服务活着但 GUI 消失"。
 - **工具**（模型可直接调用）：`fail_soft_status` / `fail_soft_list` /
   `fail_soft_restore` / `fail_soft_quarantine` / `fail_soft_repair`。
 - **HTTP API**：`GET /api/fail-soft/status`、`GET /api/fail-soft/list`、

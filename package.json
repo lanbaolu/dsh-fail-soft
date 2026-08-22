@@ -1,6 +1,6 @@
 {
   "name": "@lanbaolu/dsh-fail-soft",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "自动隔离损坏插件，让 DSH 在坏插件面前照常启动：坏插件被禁用、其余插件正常装配，提供隔离管理与一键恢复 UI（deepseek-harness plugin that quarantines broken plugins so the service keeps booting, with status tools, a one-click restore panel and auto patch adaptation）",
   "type": "module",
   "main": "./lib/index.js",

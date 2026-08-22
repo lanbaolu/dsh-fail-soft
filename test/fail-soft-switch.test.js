@@ -12,8 +12,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { readFailSoftSwitch, writeFailSoftSwitch } from '../lib/context-utils.js'
+import { dirname, join } from 'node:path'
+import { readFailSoftSwitch, writeFailSoftSwitch, ensureFailSoftSwitchDefault } from '../lib/context-utils.js'
 
 const ORIG_ENV = process.env.DSH_FAIL_SOFT_SWITCH_FILE
 
@@ -58,4 +58,44 @@ test('writeFailSoftSwitch + readFailSoftSwitch: 写 true 读回 true，写 false
     // 写入格式与内核 isFailSoft 的 readFailSoftSwitch 兼容：{ enabled: boolean }
     const parsed = JSON.parse(readFileSync(process.env.DSH_FAIL_SOFT_SWITCH_FILE, 'utf8'))
     assert.deepEqual(parsed, { enabled: false })
+  }))
+
+// ── ensureFailSoftSwitchDefault（0.1.14 首装默认启用）──
+
+test('ensureFailSoftSwitchDefault: 开关文件不存在 → 默认写入 enabled:true', () =>
+  withTmpSwitch((file) => {
+    const r = ensureFailSoftSwitchDefault()
+    assert.equal(r.action, 'enabled-by-default')
+    assert.equal(r.file, file)
+    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')), { enabled: true })
+    assert.equal(readFailSoftSwitch(), true)
+    // 再次调用：已存在 → 保持
+    assert.equal(ensureFailSoftSwitchDefault().action, 'already-enabled')
+  }))
+
+test('ensureFailSoftSwitchDefault: 用户显式禁用（enabled:false）→ 尊重，绝不覆盖', () =>
+  withTmpSwitch((file) => {
+    writeFileSync(file, JSON.stringify({ enabled: false }, null, 2) + '\n')
+    const r = ensureFailSoftSwitchDefault()
+    assert.equal(r.action, 'respected-disabled')
+    assert.equal(readFailSoftSwitch(), false)
+    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')), { enabled: false })
+  }))
+
+test('ensureFailSoftSwitchDefault: 已启用 → already-enabled；坏 JSON → 按未设置处理（默认开）', () =>
+  withTmpSwitch((file) => {
+    writeFileSync(file, JSON.stringify({ enabled: true }, null, 2) + '\n')
+    assert.equal(ensureFailSoftSwitchDefault().action, 'already-enabled')
+    writeFileSync(file, 'not json{')
+    assert.equal(ensureFailSoftSwitchDefault().action, 'enabled-by-default')
+    assert.equal(readFailSoftSwitch(), true)
+  }))
+
+test('ensureFailSoftSwitchDefault: 开关所在目录不存在 → 自动建目录再写入', () =>
+  withTmpSwitch((file) => {
+    const nested = join(dirname(file), 'no-such-subdir', 'fail-soft.json')
+    process.env.DSH_FAIL_SOFT_SWITCH_FILE = nested
+    const r = ensureFailSoftSwitchDefault()
+    assert.equal(r.action, 'enabled-by-default')
+    assert.deepEqual(JSON.parse(readFileSync(nested, 'utf8')), { enabled: true })
   }))

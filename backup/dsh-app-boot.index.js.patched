@@ -1144,6 +1144,57 @@ async function loadFailSoftPluginMount(profileDir) {
 * @param bareModuleBaseUrl - passed through to {@link mountRootInclude}.
 * @returns the mounted include entry, or `undefined` when fail-soft gave up.
 */
+/**
+* (0.1.14) Transient environment error codes: failures like these are NOT
+* broken plugins — quarantining them would permanently degrade the service
+* (real incident: a stale instance holding the port made the official
+* `dsh-host-webserver` entry get persistently quarantined, "service alive
+* but GUI gone"). Retry/fix the environment instead.
+*/
+const FAIL_SOFT_TRANSIENT_CODES = new Set(["EADDRINUSE", "EACCES", "EPERM", "EMFILE", "ENFILE", "ENOSPC"]);
+function failSoftHasTransientCause(error) {
+	const seen = /* @__PURE__ */ new Set();
+	let current = error;
+	while (current && typeof current === "object" && !seen.has(current)) {
+		seen.add(current);
+		if (typeof current.code === "string" && FAIL_SOFT_TRANSIENT_CODES.has(current.code)) return true;
+		current = current.cause;
+	}
+	return false;
+}
+/**
+* (0.1.14) Collect failed loader entries WITH their error objects (when the
+* tree carries them) and classify each: `transient` (env error code in the
+* cause chain), `core` (official `@deepseek-ai/*` entry — silently crippling
+* the harness is worse than failing loud), `quarantinable` (neither). Text
+* fallback keeps entries that only appear in messages.
+*/
+function collectQuarantinableFailures(error) {
+	const byId = /* @__PURE__ */ new Map();
+	const seen = /* @__PURE__ */ new Set();
+	const register = (id, name, entryError) => {
+		if (id === "include" && name === "cordis:include") return;
+		if (!byId.has(id)) byId.set(id, { id, name, error: entryError ?? null });
+	};
+	const walk = (err) => {
+		if (!err || seen.has(err)) return;
+		seen.add(err);
+		if (err instanceof Error) {
+			const head = /^failed to \w+ loader entry (\S+) \(([^)]+)\)/.exec(err.message);
+			if (head) register(head[1], head[2], err);
+			for (const match of err.message.matchAll(/loader entry (\S+) \(([^)]+)\)/g)) register(match[1], match[2], null);
+		}
+		if (Array.isArray(err.errors)) for (const child of err.errors) walk(child);
+		if (err.cause) walk(err.cause);
+	};
+	walk(error);
+	for (const failure of byId.values()) {
+		failure.transient = failSoftHasTransientCause(failure.error);
+		failure.core = typeof failure.name === "string" && failure.name.startsWith("@deepseek-ai/");
+		failure.quarantinable = !failure.transient && !failure.core;
+	}
+	return [...byId.values()];
+}
 async function mountRootIncludeFailSoft(binName, ctx, absoluteConfigPath, patches, bareModuleBaseUrl) {
 	try {
 		return await mountRootIncludeFailSoftImpl(binName, ctx, absoluteConfigPath, patches, bareModuleBaseUrl);
@@ -1169,26 +1220,34 @@ async function mountRootIncludeFailSoftImpl(binName, ctx, absoluteConfigPath, pa
 			return await mountRootInclude(ctx, absoluteConfigPath, remaining, bareModuleBaseUrl);
 		} catch (error) {
 			if (!isFailSoft()) throw error;
-			const found = collectLoaderEntryFailures(error);
+			const found = collectQuarantinableFailures(error);
 			if (found.length === 0) {
 				writeFailSoftDiagnostic(`${binName}: [fail-soft] plugin tree failed to mount (no plugin entry to quarantine): ${error instanceof Error ? error.message : String(error)}`);
 				return void 0;
 			}
+			const quarantinable = found.filter((failure) => failure.quarantinable);
+			for (const failure of found.filter((failure) => !failure.quarantinable)) {
+				writeFailSoftDiagnostic(`${binName}: [fail-soft] NOT quarantining "${failure.name}" (entry ${failure.id}${failure.transient ? ", transient env error" : ""}${failure.core ? ", official core entry" : ""}) — not a broken plugin; leaving it to fail loud`);
+			}
+			if (quarantinable.length === 0) {
+				writeFailSoftDiagnostic(`${binName}: [fail-soft] no quarantinable plugin in this failure (${found.map((f) => `"${f.name}" (${f.id})`).join(", ")}); failing loud with the original error`);
+				throw error;
+			}
 			const profileDir = dirname(absoluteConfigPath);
-			for (const failure of found) {
+			for (const failure of quarantinable) {
 				writeFailSoftDiagnostic(`${binName}: [fail-soft] plugin "${failure.name}" (entry ${failure.id}) failed to activate: ${error instanceof Error ? error.message : String(error)}`);
 				quarantineEntries(binName, profileDir, [{
 					id: failure.id,
 					message: `${failure.name}: ${error instanceof Error ? error.message : String(error)}`
 				}]);
 			}
-			const quarantineIds = new Set(found.map((failure) => failure.id));
+			const quarantineIds = new Set(quarantinable.map((failure) => failure.id));
 			const filtered = remaining.filter((patch) => !Array.isArray(patch?.insert) || !patch.insert.some((entry) => entry?.id !== void 0 && quarantineIds.has(entry.id)));
 			if (filtered.length === remaining.length || attempt >= 4) {
-				writeFailSoftDiagnostic(`${binName}: [fail-soft] gave up remounting after quarantining ${found.map((f) => `"${f.name}" (${f.id})`).join(", ")}; the service continues with a degraded plugin tree`);
+				writeFailSoftDiagnostic(`${binName}: [fail-soft] gave up remounting after quarantining ${quarantinable.map((f) => `"${f.name}" (${f.id})`).join(", ")}; the service continues with a degraded plugin tree`);
 				return void 0;
 			}
-			writeFailSoftDiagnostic(`${binName}: [fail-soft] quarantined ${found.map((f) => `"${f.name}" (entry ${f.id})`).join(", ")} — wrote disabled patch into ${join(profileDir, PROFILE_PATCH_FILENAME)}; retrying the mount without them. Fix the plugin(s), then remove those entries to re-enable.`);
+			writeFailSoftDiagnostic(`${binName}: [fail-soft] quarantined ${quarantinable.map((f) => `"${f.name}" (entry ${f.id})`).join(", ")} — wrote disabled patch into ${join(profileDir, PROFILE_PATCH_FILENAME)}; retrying the mount without them. Fix the plugin(s), then remove those entries to re-enable.`);
 			remaining = filtered;
 		}
 	}

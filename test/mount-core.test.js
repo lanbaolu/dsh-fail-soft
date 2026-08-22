@@ -11,6 +11,10 @@ import { join } from 'node:path'
 import {
   QUARANTINE_MARKER,
   collectLoaderEntryFailures,
+  collectLoaderEntryFailuresDetailed,
+  hasTransientCause,
+  isCoreEntryName,
+  TRANSIENT_ERROR_CODES,
   quarantineEntries,
   filterQuarantinedPatches,
   mergePatchBlock,
@@ -193,4 +197,82 @@ test('filterQuarantinedPatches: 无 insert 数组的 patch 保留（兼容 bundl
   const filtered = filterQuarantinedPatches(patches, ['bad'])
   assert.equal(filtered.length, 1)
   assert.equal(filtered[0].name, 'no-insert')
+})
+
+// ── hasTransientCause / isCoreEntryName（0.1.14 分类隔离）──
+
+test('hasTransientCause: cause 链深处含瞬态错误码 → true', () => {
+  const eaddr = Object.assign(new Error('listen EADDRINUSE'), { code: 'EADDRINUSE' })
+  const mid = new Error('failed to apply loader entry webserver (@deepseek-ai/dsh-host-webserver): listen EADDRINUSE', { cause: eaddr })
+  assert.equal(hasTransientCause(mid), true)
+})
+
+test('hasTransientCause: 无 code / 普通插件错误 → false', () => {
+  assert.equal(hasTransientCause(new Error('BOOM: broken-plugin explodes')), false)
+  assert.equal(hasTransientCause(Object.assign(new Error('x'), { code: 'ENOENT' })), false)
+  assert.equal(hasTransientCause(null), false)
+  assert.equal(hasTransientCause('plain'), false)
+})
+
+test('hasTransientCause: cause 自引用成环不死循环', () => {
+  const e = Object.assign(new Error('loop'), { code: 'EACCES' })
+  e.cause = e
+  assert.equal(hasTransientCause(e), true)
+  const loop = new Error('no code loop')
+  loop.cause = loop
+  assert.equal(hasTransientCause(loop), false)
+})
+
+test('TRANSIENT_ERROR_CODES: 覆盖已知瞬态场景', () => {
+  for (const code of ['EADDRINUSE', 'EACCES', 'EPERM', 'EMFILE', 'ENFILE', 'ENOSPC']) {
+    assert.ok(TRANSIENT_ERROR_CODES.has(code), code)
+  }
+})
+
+test('isCoreEntryName: @deepseek-ai/* 为核心，其余不是', () => {
+  assert.equal(isCoreEntryName('@deepseek-ai/dsh-host-webserver'), true)
+  assert.equal(isCoreEntryName('broken-plugin'), false)
+  assert.equal(isCoreEntryName('@lanbaolu/dsh-fail-soft'), false)
+  assert.equal(isCoreEntryName(undefined), false)
+})
+
+// ── collectLoaderEntryFailuresDetailed（0.1.14 分类收集）──
+
+/** 构造真实事故场景：坏插件 BOOM + 官方 webserver 端口冲突同时失败。 */
+function mixedFailureTree() {
+  const eaddr = Object.assign(new Error('listen EADDRINUSE: address already in use 127.0.0.1:3099'), { code: 'EADDRINUSE' })
+  const webserver = new Error('failed to apply loader entry webserver (@deepseek-ai/dsh-host-webserver): listen EADDRINUSE: address already in use 127.0.0.1:3099', { cause: eaddr })
+  const broken = new Error('failed to import loader entry broken-plugin (broken-plugin): BOOM: broken-plugin explodes on import')
+  return new AggregateError([webserver, broken], 'loader entries failed to apply')
+}
+
+test('collectLoaderEntryFailuresDetailed: 真实事故场景——瞬态核心不可隔离，坏插件可隔离', () => {
+  const found = collectLoaderEntryFailuresDetailed(mixedFailureTree())
+  assert.equal(found.length, 2)
+  const web = found.find((f) => f.id === 'webserver')
+  const bad = found.find((f) => f.id === 'broken-plugin')
+  assert.equal(web.transient, true)
+  assert.equal(web.core, true)
+  assert.equal(web.quarantinable, false)
+  assert.equal(bad.transient, false)
+  assert.equal(bad.core, false)
+  assert.equal(bad.quarantinable, true)
+})
+
+test('collectLoaderEntryFailuresDetailed: 只有文本提及（无 Error 对象）→ 按名字分类，不误判瞬态', () => {
+  const outer = new AggregateError([], 'failed to apply loader entry include (cordis:include): loader entry ghost-pkg (some-plugin) failed elsewhere')
+  const found = collectLoaderEntryFailuresDetailed(outer)
+  assert.equal(found.length, 1)
+  assert.equal(found[0].id, 'ghost-pkg')
+  assert.equal(found[0].error, null)
+  assert.equal(found[0].transient, false)
+  assert.equal(found[0].quarantinable, true)
+})
+
+test('collectLoaderEntryFailures（旧接口）: 仍只返回 {id, name}，行为不变', () => {
+  const found = collectLoaderEntryFailures(mixedFailureTree())
+  assert.deepEqual(found, [
+    { id: 'webserver', name: '@deepseek-ai/dsh-host-webserver' },
+    { id: 'broken-plugin', name: 'broken-plugin' },
+  ])
 })

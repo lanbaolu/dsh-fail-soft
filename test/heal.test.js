@@ -10,7 +10,7 @@ import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, exis
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { checkPatch, applyPatch, getPatchStatus } from '../lib/heal.js'
+import { checkPatch, applyPatch, getPatchStatus, KNOWN_PREVIOUS_PATCHED_APP, heal } from '../lib/heal.js'
 
 const BACKUP = join(dirname(fileURLToPath(import.meta.url)), '..', 'backup')
 const ORIG_APP = join(BACKUP, 'dsh-app-boot.index.js.orig')
@@ -138,4 +138,79 @@ test('getPatchStatus: 显式目录返回 ok + 结构字段', async () => {
 test('getPatchStatus: 不存在目录 → no-install 不抛错', async () => {
   const r = await getPatchStatus('/nonexistent/dsh-install/xyz/node_modules')
   assert.equal(r.status, 'no-install')
+})
+
+// ── 旧补丁平滑升级（0.1.14）──
+
+test('KNOWN_PREVIOUS_PATCHED_APP: 登记了 v0.1.13 旧补丁哈希', () => {
+  assert.ok(KNOWN_PREVIOUS_PATCHED_APP.has('26b80bb7072d0fda8ae20b8cbda01597a1535485724ab16200b0ca4fd3ad4eba'))
+})
+
+test('checkPatch: 命中旧补丁登记哈希 → outdated + overall needs-apply', async () => {
+  const { dir, appBoot } = fakeInstall(ORIG_APP, PATCHED_PB)
+  try {
+    // 模拟"旧版插件打过的补丁"：任意第三方内容 + 登记其哈希
+    writeFileSync(appBoot, readFileSync(appBoot, 'utf8') + '\n// simulated old patched content\n')
+    const oldHash = createHash('sha256').update(readFileSync(appBoot)).digest('hex')
+    KNOWN_PREVIOUS_PATCHED_APP.add(oldHash)
+    try {
+      const check = await checkPatch(dir)
+      assert.equal(check.appBoot.status, 'outdated')
+      assert.equal(check.overall, 'needs-apply')
+    } finally {
+      KNOWN_PREVIOUS_PATCHED_APP.delete(oldHash)
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('applyPatch: 旧补丁 → 直接升级覆盖为新 patched（不走三路合并/不误报 changed）', async () => {
+  const { dir, appBoot } = fakeInstall(ORIG_APP, PATCHED_PB)
+  try {
+    writeFileSync(appBoot, readFileSync(appBoot, 'utf8') + '\n// simulated old patched content\n')
+    const oldHash = createHash('sha256').update(readFileSync(appBoot)).digest('hex')
+    KNOWN_PREVIOUS_PATCHED_APP.add(oldHash)
+    try {
+      const result = await applyPatch(dir)
+      assert.ok(result.applied.some((a) => a.includes('升级旧补丁')), JSON.stringify(result))
+      const after = await checkPatch(dir)
+      assert.equal(after.appBoot.status, 'applied')
+      assert.equal(after.overall, 'ok')
+    } finally {
+      KNOWN_PREVIOUS_PATCHED_APP.delete(oldHash)
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// ── heal() 自动适配（0.1.14 旧版兼容）──
+
+test('heal: needs-adaptation → 自动三路合并适配成功（官方小改场景）', async () => {
+  // 模板拷进临时目录：三路合并会回写模板，绝不能污染仓库 backup/
+  const tmpBd = mkdtempSync(join(tmpdir(), 'fail-soft-backup-'))
+  for (const f of ['dsh-app-boot.index.js.orig', 'dsh-app-boot.index.js.patched', 'dsh-profile-boot.js.orig', 'dsh-profile-boot.js.patched']) {
+    copyFileSync(join(BACKUP, f), join(tmpBd, f))
+  }
+  const ORIG_ENV = process.env.DSH_FAIL_SOFT_BACKUP_DIR
+  process.env.DSH_FAIL_SOFT_BACKUP_DIR = tmpBd
+  // "官方小改"模拟：orig 末尾追加注释（远离补丁块，可干净合并）
+  const { dir, appBoot } = fakeInstall(ORIG_APP, ORIG_PB)
+  try {
+    writeFileSync(appBoot, readFileSync(appBoot, 'utf8') + '\n// official-side appended comment\n')
+    const before = await checkPatch(dir)
+    assert.equal(before.overall, 'needs-adaptation')
+    const report = await heal(dir)
+    assert.equal(report.status, 'repaired', JSON.stringify(report))
+    const after = await checkPatch(dir)
+    assert.equal(after.overall, 'ok')
+    // 合并后的内核文件必须含补丁特征
+    assert.ok(readFileSync(appBoot, 'utf8').includes('isFailSoft'))
+  } finally {
+    if (ORIG_ENV === undefined) delete process.env.DSH_FAIL_SOFT_BACKUP_DIR
+    else process.env.DSH_FAIL_SOFT_BACKUP_DIR = ORIG_ENV
+    rmSync(dir, { recursive: true, force: true })
+    rmSync(tmpBd, { recursive: true, force: true })
+  }
 })
