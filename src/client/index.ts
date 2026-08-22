@@ -143,10 +143,37 @@ function FailSoftSettingsSection() {
 }
 
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.slots.register({
+  // 必须走 inject 而不是裸 register：'settings.section' 这个 slot 由设置面板
+  // 根 entry（client-ui-settings-general SettingsRoot 的 children 表）声明。
+  // 裸 register 有装载顺序依赖——本插件 client entry 的 effect 先跑、声明还
+  // 没就位时，register 直接 throw「slot is not declared」，弄崩整个插件
+  // loader entry（0.1.15 修复：用户装完即报
+  // "failed to apply loader entry ... slot 'settings.section' is not declared"）。
+  // inject 的契约（dsh-cordis-client-runner 服务文档）：声明已存在 → 立即执行
+  // callback；尚未声明 → 等声明提交后在声明方 register() 内执行；永不声明 →
+  // 贡献保持 pending，插件其余部分不受影响。卸载时等待自动取消。
+  const contribute = () => ctx.slots.register({
     name: 'settings.section',
     id: 'dsh-fail-soft',
     label: () => 'Fail-soft 隔离',
     inject: () => ({}),
-  }, () => React.createElement(FailSoftSettingsSection)), '@lanbaolu/dsh-fail-soft: settings section')
+  }, () => React.createElement(FailSoftSettingsSection))
+
+  const guarded = () => {
+    try {
+      return contribute()
+    } catch (err) {
+      // fail-soft 插件自己绝不能 fail-loud：注册失败只降级（没有设置面板），
+      // 隔离/恢复/开关等核心能力照常。
+      console.warn('[dsh-fail-soft] settings section 注册失败，已降级为无面板：', err)
+      return () => {}
+    }
+  }
+
+  if (typeof (ctx.slots as { inject?: unknown }).inject === 'function') {
+    ctx.slots.inject('settings.section', guarded)
+    return
+  }
+  // 极老版本（无 inject）兜底：裸 register + 容错，宁可没面板也不崩。
+  ctx.effect(guarded, '@lanbaolu/dsh-fail-soft: settings section')
 }

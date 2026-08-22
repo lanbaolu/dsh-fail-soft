@@ -139,25 +139,12 @@ window.__ModuleLoader__.load({
 			} }, message) : null);
 		}
 		function apply(ctx) {
-			const contribute = () => ctx.slots.register({
+			ctx.effect(() => ctx.slots.register({
 				name: "settings.section",
 				id: "dsh-fail-soft",
 				label: () => "Fail-soft 隔离",
 				inject: () => ({})
-			}, () => react.createElement(FailSoftSettingsSection));
-			const guarded = () => {
-				try {
-					return contribute();
-				} catch (err) {
-					console.warn("[dsh-fail-soft] settings section 注册失败，已降级为无面板：", err);
-					return () => {};
-				}
-			};
-			if (typeof ctx.slots.inject === "function") {
-				ctx.slots.inject("settings.section", guarded);
-				return;
-			}
-			ctx.effect(guarded, "@lanbaolu/dsh-fail-soft: settings section");
+			}, () => react.createElement(FailSoftSettingsSection)), "@lanbaolu/dsh-fail-soft: settings section");
 		}
 		//#endregion
 		exports.apply = apply;

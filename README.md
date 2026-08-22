@@ -1,6 +1,6 @@
 # @lanbaolu/dsh-fail-soft
 
-> ✅ **当前状态：核心稳定候选（v0.1.14）**
+> ✅ **当前状态：核心稳定候选（v0.1.15）**
 >
 > 仍依赖 DSH 内核补丁：升级 DSH 后请通过 `fail_soft_status` 的 `patch` 字段
 > 确认补丁健康状态，若显示 `needs-adaptation` 请先更新 `backup/` 模板再继续使用。
@@ -23,7 +23,7 @@ DSH 的插件装配是 fail-loud：bundle 里**任何一个**插件加载/激活
 | 挂载兜底 | `lib/mount.js` | 被 DSH 内核（`DSH_FAIL_SOFT=1` 时）在 include 树挂载前动态加载：坏插件 → 隔离 → 剔除重试 |
 | 运行期服务 | `lib/index.js` | `failSoft` 服务 + `fail_soft_*` 工具 + `/api/fail-soft/*` HTTP API |
 | 上下文工具 | `lib/context-utils.js` | `profileDirOf` / 持久化开关读写（零 DSH 依赖） |
-| UI 面板 | `lib/client.js` | conversation.view 面板：隔离列表 + 一键恢复 |
+| UI 面板 | `lib/client.js` | 设置面板「Fail-soft 隔离」区域：状态 + 一键开关 |
 
 ## 前置条件（一次性）
 
@@ -96,7 +96,10 @@ UI 面板（🧩 行）查看。命令行重打：`node patch-apply.mjs`（与�
 > `DSH_FAIL_SOFT=1 npx @deepseek-ai/dsh web`（App 用户可手动创建
 > `~/.dsh/fail-soft.json`，内容 `{"enabled": true}`）。
 
-- **UI（0.0.10+）**：DSH 设置面板 → 「Fail-soft 隔离」区域，一键开关；
+- **UI（0.0.10+）**：DSH 设置面板 → 「Fail-soft 隔离」区域，一键开关
+  （**0.1.15 起**面板注册改走官方 `slots.inject` 契约：设置 slot 声明未就位
+  时等待而非报错——修复部分安装上"装完即 `slot 'settings.section' is not
+  declared`"崩溃的反馈；即便注册失败也只降级为无面板，核心隔离能力照常）；
 - 工具：`fail_soft_set_enabled(true)` / `fail_soft_set_enabled(false)`
 - API：`POST /api/fail-soft/set-enabled`，body `{ "enabled": true }`
 - 效果：写入 `~/.dsh/fail-soft.json`，**重启 dsh 后生效**；
