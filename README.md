@@ -64,11 +64,13 @@ UI 面板（🧩 行）查看。命令行重打：`node patch-apply.mjs`（与�
 > 那样 DSH 会按 `@lanbaolu/dsh-fail-soft` 找模块而找不到，启动直接
 > `ERR_MODULE_NOT_FOUND` 崩溃（2026-08-19 事故根因）。
 >
-> 推荐使用 DSH 官方或注入器安装，它们会自动按包名注册：
+> 推荐使用 DSH 官方安装（自动按包名注册）：
 > ```bash
-> dsh plugin --profile web add @lanbaolu/dsh-fail-soft   # 官方 pnpm 转发
-> # 或 dev_install_package(dir=<插件目录>)              # super-injector 热装配
+> dsh plugin --profile web add @lanbaolu/dsh-fail-soft@0.1.15
 > ```
+> ⚠️ **请带上版本号**：pnpm 11 有供应链冷却期（`minimumReleaseAge`）与元数据
+> 缓存，**刚发布的版本**用不带版本号的 `add` 可能解析到旧版；显式
+> `@版本号` 一定拿到指定版本（本行版本号随每次发布同步，见下方当前状态）。
 
 ```bash
 # 手动装（务必保留完整包名，以 web profile 为例）

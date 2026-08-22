@@ -15,6 +15,8 @@
  * 2. 发布产物 tgz（<包名>-<version>.tgz）存在
  * 3. git 工作区干净（无未提交改动）
  * 4. （--tag=vX.Y.Z）tag 版本 == package.json version；tag 已存在则报错提示
+ * 4b. README 安装命令固定版本（@X.Y.Z）== package.json version
+ *     （pnpm 11 供应链冷却期会拦刚发布的版本，裸 add 可能拿旧版，命令必须显式固定）
  * 5. 测试通过（node --test，零 devDeps 依赖，CI 兼容）
  */
 import { readFileSync, existsSync } from 'node:fs'
@@ -58,6 +60,18 @@ if (tagArg) {
   if (tagV !== version) issues.push(`将打的 tag ${tagArg} 版本 v${tagV} ≠ package.json ${version}`)
   const existing = execSync(`git tag -l "v${version}"`, { cwd: ROOT, encoding: 'utf8' }).trim()
   if (existing) issues.push(`tag v${version} 已存在——同版本不可重复发布（E403）。若是修复后重发，先删旧 tag 再打（git push origin :refs/tags/v${version} && git tag -d v${version}）`)
+}
+
+// ── 4b. README 安装命令的固定版本一致 ──
+// 背景（2026-08-22 实测）：pnpm 11 有 minimumReleaseAge 供应链冷却期 + 元数据
+// 缓存，刚发布的版本用不带版本号的 `dsh plugin add` 会解析到旧版（0.1.15 发布
+// 当天裸 add 装到 0.1.13）。因此 README 安装命令显式固定 @版本号；每次发布
+// 必须同步该版本号，否则用户照抄会装到旧版。
+const cmdMatch = readme.match(/dsh plugin --profile \S+ add @lanbaolu\/dsh-fail-soft@([0-9][0-9.]*)/)
+if (!cmdMatch) {
+  issues.push('README 未找到带固定版本的安装命令（应为 dsh plugin --profile web add @lanbaolu/dsh-fail-soft@X.Y.Z）')
+} else if (cmdMatch[1] !== version) {
+  issues.push(`README 安装命令固定版本 @${cmdMatch[1]} ≠ package.json ${version}——发布前必须同步安装命令里的版本号`)
 }
 
 // ── 5. 测试 ──
