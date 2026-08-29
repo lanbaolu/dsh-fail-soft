@@ -10,20 +10,24 @@ import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, exis
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { checkPatch, applyPatch, getPatchStatus, KNOWN_PREVIOUS_PATCHED_APP, heal } from '../lib/heal.js'
+import { checkPatch, applyPatch, rollbackPatch, getPatchStatus, KNOWN_PREVIOUS_PATCHED_APP, heal } from '../lib/heal.js'
 
 const BACKUP = join(dirname(fileURLToPath(import.meta.url)), '..', 'backup')
 const ORIG_APP = join(BACKUP, 'dsh-app-boot.index.js.orig')
 const PATCHED_APP = join(BACKUP, 'dsh-app-boot.index.js.patched')
+const ORIG_APP_ALPHA1 = join(BACKUP, 'dsh-app-boot.index.js.orig.alpha1')
+const PATCHED_APP_ALPHA1 = join(BACKUP, 'dsh-app-boot.index.js.patched.alpha1')
 const ORIG_PB = join(BACKUP, 'dsh-profile-boot.js.orig')
 const PATCHED_PB = join(BACKUP, 'dsh-profile-boot.js.patched')
+const ORIG_PB_ALPHA1 = join(BACKUP, 'dsh-profile-boot.js.orig.alpha1')
+const PATCHED_PB_ALPHA1 = join(BACKUP, 'dsh-profile-boot.js.patched.alpha1')
 
 function sha256(file) {
   return createHash('sha256').update(readFileSync(file)).digest('hex')
 }
 
 /** 构造一个 fake DSH 安装目录（appBoot 与 profileBoot 内容由调用方指定文件）。 */
-function fakeInstall(appBootSource, pbSource) {
+function fakeInstall(appBootSource, pbSource, version = '0.1.0-rc.6') {
   const dir = mkdtempSync(join(tmpdir(), 'fail-soft-heal-'))
   const appBoot = join(dir, '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js')
   mkdirSync(dirname(appBoot), { recursive: true })
@@ -31,7 +35,7 @@ function fakeInstall(appBootSource, pbSource) {
   const pb = join(dir, '@deepseek-ai', 'dsh', 'lib', 'profile-boot-test.js')
   mkdirSync(dirname(pb), { recursive: true })
   if (pbSource) copyFileSync(pbSource, pb)
-  writeFileSync(join(dir, '@deepseek-ai', 'dsh-app-boot', 'package.json'), JSON.stringify({ version: '0.1.0-rc.6' }), 'utf8')
+  writeFileSync(join(dir, '@deepseek-ai', 'dsh-app-boot', 'package.json'), JSON.stringify({ version }), 'utf8')
   return { dir, appBoot, pb }
 }
 
@@ -88,7 +92,7 @@ test('applyPatch: 官方原版 → 重打为 patched（appBoot 与 profileBoot �
   const { dir, appBoot, pb } = fakeInstall(ORIG_APP, ORIG_PB)
   try {
     const r = await applyPatch(dir)
-    assert.deepEqual(r.applied.sort(), ['dsh-app-boot', 'profile-boot (profile-boot-test.js)'].sort())
+    assert.deepEqual(r.applied.sort(), ['dsh-app-boot (legacy 模板)', 'profile-boot (profile-boot-test.js, legacy)'].sort())
     assert.equal(sha256(appBoot), sha256(PATCHED_APP))
     assert.equal(sha256(pb), sha256(PATCHED_PB))
   } finally {
@@ -212,5 +216,102 @@ test('heal: needs-adaptation → 自动三路合并适配成功（官方小改�
     else process.env.DSH_FAIL_SOFT_BACKUP_DIR = ORIG_ENV
     rmSync(dir, { recursive: true, force: true })
     rmSync(tmpBd, { recursive: true, force: true })
+  }
+})
+
+// ── alpha1 双模板（0.1.2-alpha.1 官方大改适配）──
+
+test('alpha1: checkPatch 命中 alpha1 patched → applied', async () => {
+  const { dir } = fakeInstall(PATCHED_APP_ALPHA1, PATCHED_PB, '0.1.2-alpha.1')
+  try {
+    const r = await checkPatch(dir)
+    assert.equal(r.appBoot.status, 'applied')
+    assert.equal(r.overall, 'ok')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('alpha1: checkPatch 命中 alpha1 orig（官方原版）→ pristine + needs-apply', async () => {
+  const { dir } = fakeInstall(ORIG_APP_ALPHA1, ORIG_PB, '0.1.2-alpha.1')
+  try {
+    const r = await checkPatch(dir)
+    assert.equal(r.appBoot.status, 'pristine')
+    assert.equal(r.overall, 'needs-apply')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('alpha1: applyPatch 官方 alpha1 原版 → 重打为 alpha1 patched（含 fail-soft 特征）', async () => {
+  const { dir, appBoot } = fakeInstall(ORIG_APP_ALPHA1, ORIG_PB, '0.1.2-alpha.1')
+  try {
+    const r = await applyPatch(dir)
+    assert.ok(r.applied.some((a) => a.includes('alpha1')), JSON.stringify(r))
+    assert.equal(sha256(appBoot), sha256(PATCHED_APP_ALPHA1))
+    const src = readFileSync(appBoot, 'utf8')
+    for (const mark of ['mountRootIncludeFailSoft', 'isFailSoft', 'loadOverlayPatchesFailSoft', 'quarantineEntries', 'FAIL_SOFT_TRANSIENT_CODES']) {
+      assert.ok(src.includes(mark), `alpha1 补丁缺少 ${mark}`)
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('alpha1: applyPatch 已打 alpha1 → skipped 无改动', async () => {
+  const { dir, appBoot } = fakeInstall(PATCHED_APP_ALPHA1, PATCHED_PB, '0.1.2-alpha.1')
+  try {
+    const r = await applyPatch(dir)
+    assert.equal(r.applied.length, 0)
+    assert.equal(sha256(appBoot), sha256(PATCHED_APP_ALPHA1))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('alpha1: rollbackPatch alpha1 patched → 回滚为 alpha1 官方原版', async () => {
+  const { dir, appBoot } = fakeInstall(PATCHED_APP_ALPHA1, PATCHED_PB, '0.1.2-alpha.1')
+  try {
+    const r = await rollbackPatch(dir)
+    assert.ok(r.rolledBack.some((x) => x.includes('alpha1')), JSON.stringify(r))
+    assert.equal(sha256(appBoot), sha256(ORIG_APP_ALPHA1))
+    assert.ok(!readFileSync(appBoot, 'utf8').includes('isFailSoft'))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('alpha1: 内容即真相——legacy patched 装在 alpha 版本目录 → 按内容判 applied，不误判', async () => {
+  // 官方 version 写 0.1.2-alpha.1，但 app-boot 内容是 legacy patched（旧 npx 缓存残留场景）
+  const { dir } = fakeInstall(PATCHED_APP, PATCHED_PB, '0.1.2-alpha.1')
+  try {
+    const r = await checkPatch(dir)
+    assert.equal(r.appBoot.status, 'applied')
+    assert.equal(r.overall, 'ok')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('alpha1: profile-boot 双模板——alpha1 pb 原版 → 重打为 alpha1 pb 补丁', async () => {
+  const { dir, pb } = fakeInstall(ORIG_APP_ALPHA1, ORIG_PB_ALPHA1, '0.1.2-alpha.1')
+  try {
+    const r = await applyPatch(dir)
+    assert.ok(r.applied.some((a) => a.includes('profile-boot') && a.includes('alpha1')), JSON.stringify(r))
+    assert.equal(sha256(pb), sha256(PATCHED_PB_ALPHA1))
+    assert.ok(readFileSync(pb, 'utf8').includes('composed.profile.dir'))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('alpha1: profile-boot 双模板——alpha1 pb 已打 → skipped', async () => {
+  const { dir, pb } = fakeInstall(PATCHED_APP_ALPHA1, PATCHED_PB_ALPHA1, '0.1.2-alpha.1')
+  try {
+    const r = await applyPatch(dir)
+    assert.equal(r.applied.length, 0)
+    assert.equal(sha256(pb), sha256(PATCHED_PB_ALPHA1))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
   }
 })
