@@ -93,7 +93,10 @@ function FailSoftSettingsSection() {
     patch.status === 'ok' ? '正常'
     : patch.status === 'checking' ? '检测中…'
     : patch.status === 'repaired' ? '已自动重打（重启后生效）'
-    : patch.status === 'needs-adaptation' || patch.status === 'failed' || patch.status === 'no-install' ? '需适配'
+    : patch.status === 'needs-apply' ? '待重打（重启后自动修复）'
+    : patch.status === 'needs-adaptation' ? '需适配（官方内核已改结构）'
+    : patch.status === 'no-install' ? '未检测到内核安装'
+    : patch.status === 'failed' ? '修复失败（请查看日志）'
     : String(patch.status ?? '?')
 
   return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
