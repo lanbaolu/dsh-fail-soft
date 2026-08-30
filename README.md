@@ -1,6 +1,6 @@
 # @lanbaolu/dsh-fail-soft
 
-> ✅ **当前状态：核心稳定候选（v0.1.16）**
+> ✅ **当前状态：核心稳定候选（v0.1.17）**
 >
 > 仍依赖 DSH 内核补丁：升级 DSH 后请通过 `fail_soft_status` 的 `patch` 字段
 > 确认补丁健康状态，若显示 `needs-adaptation` 请先更新 `backup/` 模板再继续使用。
@@ -44,7 +44,9 @@ DSH 的插件装配是 fail-loud：bundle 里**任何一个**插件加载/激活
 DSH 官方升级 = npx 重新拉包到新的 `~/.npm/_npx/<hash>/` 目录，内核补丁
 会被覆盖丢失。本插件每次启动时自动运行 **内核补丁自愈**（`lib/heal.js`）：
 
-- **动态定位**实际运行的 DSH 安装（不硬编码 npx hash，可从当前进程 argv 推断）；
+- **动态定位**实际运行的 DSH 安装（不硬编码 npx hash：从当前进程 argv 推断；
+  **0.1.17 起**支持 Desktop App——dsh 内核跑在 Electron 主进程、argv 无内核
+  路径时改从 `process.resourcesPath` → `app.asar.unpacked` 定位）；
 - **检测**补丁状态：`ok`（已打）/ `needs-apply`（丢失，npx 重装同版本）/ `needs-adaptation`（官方改了代码结构）；
 - **自动重打**：仅当目标与"已知原始版"一致时安全重打（含 `profile-boot-*.js` 文件名 hash 变化的情况）；
 - **官方改动结构**时报告 `needs-adaptation` 并提示更新 backup/ 模板，**绝不破坏新版代码**。
@@ -67,7 +69,7 @@ UI 面板（🧩 行）查看。命令行重打：`node patch-apply.mjs`（与�
 >
 > 推荐使用 DSH 官方安装（自动按包名注册）：
 > ```bash
-> dsh plugin --profile web add @lanbaolu/dsh-fail-soft@0.1.16
+> dsh plugin --profile web add @lanbaolu/dsh-fail-soft@0.1.17
 > ```
 > ⚠️ **请带上版本号**：pnpm 11 有供应链冷却期（`minimumReleaseAge`）与元数据
 > 缓存，**刚发布的版本**用不带版本号的 `add` 可能解析到旧版；显式
