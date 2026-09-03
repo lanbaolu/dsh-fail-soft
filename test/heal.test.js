@@ -10,7 +10,7 @@ import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, exis
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { checkPatch, applyPatch, rollbackPatch, getPatchStatus, KNOWN_PREVIOUS_PATCHED_APP, heal } from '../lib/heal.js'
+import { checkPatch, applyPatch, rollbackPatch, getPatchStatus, KNOWN_PREVIOUS_PATCHED_APP, heal, detectActiveInstall } from '../lib/heal.js'
 
 const BACKUP = join(dirname(fileURLToPath(import.meta.url)), '..', 'backup')
 const ORIG_APP = join(BACKUP, 'dsh-app-boot.index.js.orig')
@@ -314,4 +314,33 @@ test('alpha1: profile-boot 双模板——alpha1 pb 已打 → skipped', async (
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+// ── detectActiveInstall: argv 分隔符兼容（POSIX 原样 / Windows 反斜杠）──
+
+/** 临时替换 process.argv 跑 detectActiveInstall（命中 argv 分支即返回，无副作用）。 */
+function detectWithArgv(argv) {
+  const orig = process.argv
+  process.argv = argv
+  try {
+    return detectActiveInstall()
+  } finally {
+    process.argv = orig
+  }
+}
+
+test('detectActiveInstall: POSIX argv（npx 布局）→ 按原样返回正斜杠目录，不含反斜杠', () => {
+  const dir = detectWithArgv(['/usr/local/bin/node', '/home/u/.npm/_npx/68a2c3d/node_modules/@deepseek-ai/dsh/lib/bin.js', 'web'])
+  assert.equal(dir, '/home/u/.npm/_npx/68a2c3d/node_modules')
+  assert.ok(!dir.includes('\\'), `POSIX 路径不得含反斜杠：${dir}`)
+})
+
+test('detectActiveInstall: Windows argv（npm -g 全局布局）→ 反斜杠目录原样返回', () => {
+  const dir = detectWithArgv(['C:\\Program Files\\nodejs\\node.exe', 'C:\\Users\\u\\AppData\\Roaming\\npm\\node_modules\\@deepseek-ai\\dsh\\lib\\bin.js', 'web'])
+  assert.equal(dir, 'C:\\Users\\u\\AppData\\Roaming\\npm\\node_modules')
+})
+
+test('detectActiveInstall: Windows 正斜杠 argv（git-bash 风格）→ 原样返回（Win32 两种分隔符都合法）', () => {
+  const dir = detectWithArgv(['node', 'C:/Users/u/AppData/Roaming/npm/node_modules/@deepseek-ai/dsh/lib/bin.js', 'web'])
+  assert.equal(dir, 'C:/Users/u/AppData/Roaming/npm/node_modules')
 })
