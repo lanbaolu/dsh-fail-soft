@@ -10,7 +10,7 @@
 >
 > 相应处置：
 > - GitHub Releases 全部移除（下载渠道已关闭）；
-> - npm 包 `@lanbaolu/dsh-fail-soft` 已标记 deprecate，不再发布新版本；
+> - npm 包 `@lanbaolu/dsh-fail-soft` 已停止发布新版本，已安装用户请卸载并改用 DSH Desktop；
 > - 本仓库已归档（read-only），以下文档仅作历史参考，安装命令均已失效。
 
 **插件错误自动隔离**：坏插件被禁用、其余插件照常启动，提供隔离管理与恢复 UI。
