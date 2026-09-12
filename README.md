@@ -1,9 +1,17 @@
 # @lanbaolu/dsh-fail-soft
 
-> ✅ **当前状态：核心稳定候选（v0.1.17）**
+> ⛔ **本项目已停止更新与维护（2026-09-12）**
 >
-> 仍依赖 DSH 内核补丁：升级 DSH 后请通过 `fail_soft_status` 的 `patch` 字段
-> 确认补丁健康状态，若显示 `needs-adaptation` 请先更新 `backup/` 模板再继续使用。
+> 本插件提供的全部保底能力（坏插件自动隔离、安全模式启动、插件故障恢复/一键修复）
+> 已**内置于 DeepSeek Harness 官方桌面版 [DSH Desktop](https://github.com/dataelement/dsh-desktop)**
+> （v0.8.1 起的「更清晰的插件故障恢复」/安全模式隔离）。
+> **请直接下载使用 DSH Desktop：https://github.com/dataelement/dsh-desktop**，
+> 无需再安装本插件或内核补丁。
+>
+> 相应处置：
+> - GitHub Releases 全部移除（下载渠道已关闭）；
+> - npm 包 `@lanbaolu/dsh-fail-soft` 已标记 deprecate，不再发布新版本；
+> - 本仓库已归档（read-only），以下文档仅作历史参考，安装命令均已失效。
 
 **插件错误自动隔离**：坏插件被禁用、其余插件照常启动，提供隔离管理与恢复 UI。
 
